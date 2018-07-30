@@ -18,19 +18,23 @@ You should have received a file named 'COPYING' with this
 program. If not, you can review a copy of the GPL at the
 GNU website, at http://gnu.org
 """
-#@+others
-#@+node:imports
-import sys, os, commands, re, traceback, signal, time, stat, StringIO, popen2, sha
-import getopt
-import thread, threading
 
-# imports for ip2cc
-from urllib import urlopen
-from socket import inet_aton, inet_ntoa, gethostbyname, gaierror
+import getopt
 import struct
-#import re
-#import sys, os
-#from ip2cc import cc2name
+import thread
+import threading
+
+# @+others
+# @+node:imports
+import commands
+import os
+import popen2
+import re
+import sha
+import signal
+import time
+import traceback
+
 
 
 # grab GeoIP if available
@@ -40,14 +44,12 @@ try:
 except:
     GeoIP = None
 
-# import gui stuff, if we can
-try:
-    from Tkinter import *
-    import Pmw
-    import tkMessageBox
-    from tkFileDialog import askopenfilename, asksaveasfilename
-except:
-    pass
+# import gui stuff
+from Tkinter import *
+import Pmw
+import tkMessageBox
+from tkFileDialog import askopenfilename, asksaveasfilename
+
 #@-node:imports
 #@+node:globals
 # ---------------------------------------------
@@ -92,7 +94,7 @@ try:
     class TShaperGui:
         """
         Displays a GUI to allow users to visualise and edit shaping config
-        
+
         GUI can:
             - launch/stop shaper
             - display/edit shaper config
@@ -101,54 +103,54 @@ try:
         #@    @+others
         #@+node:__init__
         def __init__(self):
-        
+
             self.startTime = time.time()
-        
+
             # load initial config
             self.config = ShaperConfig(os.environ.get("PYSHAPERCONFIG", None))
             self.config.dontSave = True
             self.shaperPeriod = self.config.shaperPeriod
-        
+
             # set up connection monitoring
             self.lockConns = threading.Lock()
             self.conns = TCPConns()
             thread.start_new_thread(self.thrdConns, ())
-        
+
             # cache of packet details
             # each key is a list [src,sport,dst,dport] of packet details
             # each value is a shaper class which matches the packet
             self.pktCache = {}
-        
+
             self.savingWindowSize = False
-            
+
             self.buildWindow()
             self.centerWindow()
-        
+
             ipmon = self.ipmon = IPmon(handler=self.on_packet)
             thread.start_new_thread(ipmon.run, ())
-        
+
         #@-node:__init__
         #@+node:buildWindow
         def buildWindow(self):
-            
+
             root = self.root = Tk()
             root.title("pyshaper - Bandwidth Manager")
             root.protocol("WM_DELETE_WINDOW", self.on_close)
-        
+
             # set change flag
             self.hasChanged = False
-        
+
             # gui sizing attributes
             self.clsNameWidth = 16
-        
+
             # tooltip object
             self.toolTip = Pmw.Balloon(self.root)
-        
+
             frmMain = self.frmMain = myFrame(root)
             frmMain.pack(side=LEFT, fill=BOTH, expand=1)
-        
+
             self.buildMenu()
-        
+
             # create the panes
             paneMain = self.paneMain = myPanedWidget(self.frmMain,
                                                      orient='vertical',
@@ -157,35 +159,35 @@ try:
                                                      command=self.on_paneMainResize,
                                                      )
             paneMain.pack(fill=BOTH, expand=1)
-        
+
             # overall control pane
             paneCtrl = paneMain.add('ctrl')
             frmCtrl = self.frmCtrl = myFrame(paneCtrl)
             frmCtrl.pack(side=TOP, fill=X, expand=1)
-        
+
             # checkbutton to turn shaping on and off
             isRunning = self.isRunning()
             varRunning = self.varRunning = IntVar(frmCtrl)
             varRunning.set(isRunning)
             self.chkRunning = myCheckbutton(
                 frmCtrl,
-                text="Shaping Is Active", 
+                text="Shaping Is Active",
                 variable=varRunning,
                 command=self.on_chkRunning,
                 )
             self.chkRunning.pack(side=LEFT)
-        
+
             # traffic indicator
             self.labTraffic = myLabel(
                 frmCtrl,
                 text="Traffic",
                 )
             self.labTraffic.pack(side=LEFT)
-        
+
         	# counter for setting shaper interval
             frmPeriod = self.frmCtrl = myFrame(paneCtrl)
             frmPeriod.pack(side=TOP, fill=X, expand=1)
-        
+
             myLabel(frmPeriod, text="Shape current connections every").pack(side=LEFT)
             s = self.cntShaperPeriod = myCounter(
                 frmPeriod,
@@ -197,14 +199,14 @@ try:
                 )
             s.pack(side=LEFT)
             myLabel(frmPeriod, text="seconds").pack(side=LEFT)
-        
-        
+
+
             # button to restart the shaper
             #if isRunning:
             #    state = NORMAL
             #else:
             #    state = DISABLED
-        
+
             if self.isRunning():
                 txt = "Apply Changes"
             else:
@@ -217,12 +219,12 @@ try:
                 state=state,
                 )
             self.butApplyChanges.pack(side=RIGHT)
-            
+
             # classes display pane
             paneClasses = paneMain.add('classes')
             #frmClasses = self.frmClasses = myFrame(paneClasses)
             #frmClasses.pack(side=TOP, fill=X, expand=1)
-        
+
             # big list widget for displaying connection classes and traffic
             classWidgets = self.classWidgets = {}
             classWidgetsList = self.classWidgetsList = []
@@ -235,7 +237,7 @@ try:
                 if not classes:
                     continue
                 #classes.sort()
-        
+
                 # add all traffic classes
                 for cls in classes:
                     lstItem = ClsListBoxItem(lstClasses, iface, cls,
@@ -244,7 +246,7 @@ try:
                     classWidgets[iface.name, cls.name] = lstItem
                     classWidgetsList.append(lstItem)
                     lstClasses.append(lstItem)
-        
+
                 # add the default class for this interface
                 lstItem = ClsListBoxItem(lstClasses, iface, iface.default,
                                          clsNameWidth=self.clsNameWidth,
@@ -252,21 +254,21 @@ try:
                 classWidgets[iface.name, 'default'] = lstItem
                 classWidgetsList.append(lstItem)
                 lstClasses.append(lstItem)
-        
+
             return
-        
+
             # stuff here is just for reference
-        
+
             menuEdit = myMenu(menuTop, "Edit")
             menuEdit.addCmd("Configuration...", self.on_menuEditConfig,
                             "Control-C", "Shift-^C")
-        
+
             menuView = myMenu(menuTop, "View")
             menuView.addCmd("Show Router Console", self.on_menuViewConsole)
-        
+
             menuTools = myMenu(menuTop, "Tools")
             menuTools.addCmd("Re-Seed Peers Database", self.on_menuToolsReseed)
-        
+
             menuHelp = myMenu(menuTop, "Help")
             menuHelp.addCmd("User Manual", self.on_menuHelpManual)
             menuHelp.addCmd("I2P Project Website", self.on_menuHelpWebsite)
@@ -274,7 +276,7 @@ try:
             menuHelp.addCmd("Mailing List", self.on_menuHelpMailList)
             menuHelp.addCmd("Wiki Pages", self.on_menuHelpWiki)
             menuHelp.addCmd("About", self.on_menuHelpAbout)
-        
+
             if 0:
                 menuEdit = myMenu(menuTop, "Edit")
                 menuEdit.addCmd("New Task", self.on_menuEditNewTask,
@@ -287,21 +289,21 @@ try:
                                 "Control-p", "^P")
                 menuEdit.addCmd("Settings", self.on_menuEditSettings,
                                 "Control-S", "Shift-^S")
-            
+
                 menuDebug = myMenu(menuTop, "Debug")
                 menuDebug.addCmd("Calendar", self.on_menuDebugCalendar, "Control-C", "S^C")
-            
+
                 menuHelp = myMenu(menuTop, "Help")
                 menuHelp.addCmd("About", self.on_menuHelpAbout, None, None)
-        
+
             return
-        
+
             # create router status pane
             paneRouter = self.paneRouter = paneMain.add('router')
-        
+
             frmRouter = myFrame(paneRouter)
             frmRouter.pack(side=TOP, fill=X, expand=1)
-        
+
             myLabel(frmRouter,
                     text="Router Status",
                     font=theme.myFontHeading).pack(side=LEFT, anchor=W)
@@ -309,7 +311,7 @@ try:
             self.butRouter.pack(side=RIGHT, anchor=E)
             self.labRouterStatus = myLabel(frmRouter, text=rtrTxt)
             self.labRouterStatus.pack(side=RIGHT, anchor=W)
-        
+
             if 0:
                 # TunnelMgr status and button pane
                 if self.i2pmgr.tunnelMgrIsRunning():
@@ -327,7 +329,7 @@ try:
                 self.butTunnelMgr.pack(side=RIGHT, anchor=E)
                 self.labTunnelMgrStatus = myLabel(frmTunnelMgr, text=tmgrTxt)
                 self.labTunnelMgrStatus.pack(side=RIGHT, anchor=W)
-        
+
             # eepproxy status and button pane
             if self.i2pmgr.webProxyIsRunning():
                 eepTxt = "Running"
@@ -335,7 +337,7 @@ try:
             else:
                 eepTxt = "Not Running"
                 eepButTxt = "Start"
-        
+
             frmEepProxy = myFrame(paneRouter)
             frmEepProxy.pack(side=TOP, fill=X, expand=1)
             myLabel(frmEepProxy,
@@ -349,20 +351,20 @@ try:
                 self.butEepProxy,
                 "Set your browser's HTTP proxy to localhost:%s to use" % self.i2pmgr.i2pMgrCfg['webProxyPort'],
                 )
-        
-        
+
+
             # services display pane
             paneServices = self.paneServices = paneMain.add('services')
-        
+
             labServices = myLabel(paneServices, text="Your Services", justify=LEFT)
             labServices.pack(side=TOP, anchor=W)
-        
+
             frmSvcs = myPanedWidget(paneServices, orient='horizontal')
             frmSvcs.pack(side=LEFT, fill=Y, expand=1)
-        
+
             # *********************************************
             # CREATE/POPULATE SERVICESLIST MEGAWIDGET
-            
+
             paneSvcsList = frmSvcs.add('serviceslist')
             lstServices = self.lstServices = SvcListBox(paneSvcsList)
             lstServices.pack(side=LEFT, fill=BOTH, expand=1)
@@ -372,48 +374,48 @@ try:
                 lstServices.append(SvcListBoxItem(lstServices, name=svc, gui=self))
             if len(svcs) > 0:
                 lstServices.selectItem(0)
-        
+
             frmSvcButs = frmSvcs.add('svcsbuts', min=48, max=80)
-        
+
             frmSvcButs1 = myFrame(frmSvcButs, bg="green")
             frmSvcButs1.pack(side=TOP)
-        
-            butStartAll = self.butStartAll = myButton(frmSvcButs1, 
+
+            butStartAll = self.butStartAll = myButton(frmSvcButs1,
                                                       text="Start All",
                                                       command=self.on_butStartAll,
                                                       )
             butStartAll.pack(side=TOP, fill=X, expand=1, anchor=N)
             self.toolTip.bind(butStartAll, "Starts all I2P services which\nare not already running")
-        
-            butStopAll = self.butStopAll = myButton(frmSvcButs1, 
+
+            butStopAll = self.butStopAll = myButton(frmSvcButs1,
                                                     text="Stop All",
                                                     command=self.on_butStopAll,
                                                     )
             butStopAll.pack(side=TOP, fill=X, expand=1, anchor=N)
             self.toolTip.bind(butStopAll, "Stops all I2P services which\nare presently running")
-        
-            butStartService = self.butStartService = myButton(frmSvcButs1, 
+
+            butStartService = self.butStartService = myButton(frmSvcButs1,
                                                               text="Start",
                                                               command=self.on_butStartService,
                                                               )
             butStartService.pack(side=TOP, fill=X, expand=1, anchor=N)
             self.toolTip.bind(butStartService, "Starts the selected I2P service")
-        
-            butStopService = self.butStopService = myButton(frmSvcButs1, 
+
+            butStopService = self.butStopService = myButton(frmSvcButs1,
                                                               text="Stop",
                                                               command=self.on_butStopService,
                                                               )
             butStopService.pack(side=TOP, fill=X, expand=1, anchor=N)
             self.toolTip.bind(butStopService, "Stops the selected I2P service")
-        
-            butAddService = self.butAddService = myButton(frmSvcButs1, 
+
+            butAddService = self.butAddService = myButton(frmSvcButs1,
                                                               text="Add",
                                                               command=self.on_butAddService,
                                                               )
             butAddService.pack(side=TOP, fill=X, expand=1, anchor=N)
             self.toolTip.bind(butAddService, "Creates a whole new I2P service")
-        
-            butEditService = self.butEditService = myButton(frmSvcButs1, 
+
+            butEditService = self.butEditService = myButton(frmSvcButs1,
                                                               text="Edit",
                                                               command=self.on_butEditService,
                                                               )
@@ -424,8 +426,8 @@ try:
                 "of the selected I2P service\n"
                 "You may not make changes if the service is"
                 "presently running")
-        
-            butDeleteService = self.butDeleteService = myButton(frmSvcButs1, 
+
+            butDeleteService = self.butDeleteService = myButton(frmSvcButs1,
                                                               text="Delete",
                                                               command=self.on_butDeleteService,
                                                               )
@@ -435,7 +437,7 @@ try:
                 "Destroys the selected service, and\n"
                 "deletes all its files.\n"
                 "Currently running services may not be deleted")
-        
+
             # add a title pane with random slogan
             self.paneTitle = paneMain.add('title', min=24, max=80)
             random.seed(time.asctime())
@@ -446,79 +448,79 @@ try:
                 slogan = "(slogans.txt file not found)"
             labTitleText = "I2P: " + slogan
             labTitle = myLabel(self.paneTitle,
-                               text=labTitleText, 
+                               text=labTitleText,
                                wraplength=400,
                                font=theme.myFont,
                                )
             labTitle.pack(anchor='n')
-        
-        
+
+
             # status pane and text widget
             if 0:
                 paneLog = self.paneLog = paneMain.add('log', min=60)
-            
+
                 labLog = myLabel(paneLog, text="Status Log", justify=LEFT)
                 labLog.pack(side=TOP, anchor=NW)
-                
+
                 txtLog = myText(paneLog, usehullsize=1)
                 txtLog.pack(side=TOP, fill=BOTH, expand=1)
                 self.txtLog = txtLog.interior()
                 self.txtLog.configure(height=12)
                 txtLog.component('hull').configure(height=80)
                 txtLog.component('hull').pack(fill=BOTH)
-            
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         #@-node:buildWindow
         #@+node:buildMenu
         def buildMenu(self):
-        
+
             # -------------------------------------------------
             # Construct the menu
             menuTop = self.menuTop = myMenu(self.frmMain)
             self.root.config(menu=menuTop)
-        
+
             menuFile = myMenu(menuTop, "File")
             menuFile.addCmd("Quit", self.on_menuFileQuit,
                             "Control-q", "^Q")
-        
+
             menuHelp = myMenu(menuTop, "Help")
             menuHelp.addCmd("About", self.on_menuHelpAbout,
                             "Shift-Alt-Control-h", "")
         #@-node:buildMenu
         #@+node:centerWindow
         def centerWindow(self):
-        
-            root = self.root    
-        
+
+            root = self.root
+
             root.update_idletasks()
-        
+
             scrW = root.winfo_screenwidth()
             scrH = root.winfo_screenheight()
-        
+
             w = root.winfo_width()
             h = root.winfo_height()
-            
+
             #print w, h
-        
+
             root.geometry("+%s+%s" % ((scrW - w)/2, (scrH - h)/2))
         #@-node:centerWindow
         #@+node:run
         def run(self):
-        
+
             #print "gui not implemented yet"
-        
+
             self.lastPktTime = time.time()
             self.frmMain.after(100, self.on_startup)
             self.root.mainloop()
@@ -529,7 +531,7 @@ try:
             Determines whether the daemon is running, returns True/False
             """
             return os.path.isfile(pidfile)
-        
+
         #@-node:isRunning
         #@+node:startDaemon
         def startDaemon(self):
@@ -554,7 +556,7 @@ try:
         #@-node:restartDaemon
         #@+node:on_startup
         def on_startup(self):
-        
+
             """
             Callback which gets hit as soon as the gui mainloop is entered
             """
@@ -564,20 +566,20 @@ try:
         #@-node:on_startup
         #@+node:on_close
         def on_close(self, ev=None):
-        
+
             print "pyshaper gui window closed"
             self.root.destroy()
             sys.exit(0)
         #@-node:on_close
         #@+node:on_paneMainResize
         def on_paneMainResize(self, wh):
-            
+
             #print "pane main resize: %s" % repr(wh)
             #print self.root.geometry()
-        
+
             if time.time() - self.startTime < 3:
                 return
-        
+
             if self.savingWindowSize:
                 #print "saving config with new window size"
                 g = self.root.geometry()
@@ -590,7 +592,7 @@ try:
         #@-node:on_paneMainResize
         #@+node:on_menuFileQuit
         def on_menuFileQuit(self, ev=None):
-        
+
             self.on_close()
         #@-node:on_menuFileQuit
         #@+node:on_menuHelpAbout
@@ -628,68 +630,68 @@ try:
         #@-node:on_chkRunning
         #@+node:on_butApplyChanges
         def on_butApplyChanges(self, ev=None):
-        
+
             classWidgets = self.classWidgets
             config = self.config
-        
+
             # transfer period val into config
             config.shaperPeriod = int(self.cntShaperPeriod.get())
-        
+
             # transfer the class counter values into config
             for iface in self.config.interfaces:
                 #print iface
                 ifaceName = iface.name
-        
+
                 # get config object for this interface
                 cfgIface = config.interfacesdict[ifaceName]
-        
+
                 # get counter values from each class
                 for cls in iface.classes[:]:
-        
+
                     # uplift widget values
                     clsName = cls.name
                     clsItem = classWidgets[ifaceName, clsName]
                     bwIn = int(clsItem.cntIn.getvalue())
                     bwOutRate = int(clsItem.cntOutMin.getvalue())
                     bwOutCeil = int(clsItem.cntOutMax.getvalue())
-        
+
                     # get config object for this class
                     cfgClass = cfgIface.classesdict[clsName]
-        
+
                     # and update config object
                     cfgClass.bwIn = bwIn
                     cfgClass.bwOutRate = bwOutRate
                     cfgClass.bwOutCeil = bwOutCeil
-        
+
                 # ditto for interface default class
                 clsItem = classWidgets[ifaceName, 'default']
                 bwIn = int(clsItem.cntIn.getvalue())
                 bwOutRate = int(clsItem.cntOutMin.getvalue())
                 bwOutCeil = int(clsItem.cntOutMax.getvalue())
-        
+
                 # get config object for this class
                 cfgClass = cfgIface.default
-        
+
                 # and update config object
                 cfgClass.bwIn = bwIn
                 cfgClass.bwOutRate = bwOutRate
                 cfgClass.bwOutCeil = bwOutCeil
-        
+
             # write out config
             print "trying to save updated config"
             config.dontSave = False
             config.save(True)
-        
+
             self.butApplyChanges.config(state=DISABLED)
-        
+
             # and tell daemon to reload the new config
             if self.isRunning():
                 self.restartDaemon()
-        
+
         #@-node:on_butApplyChanges
         #@+node:on_changeValue
         def on_changeValue(self, wid, newval):
-        
+
             print "value changed"
             self.hasChanged = True
             self.butApplyChanges.configure(state=NORMAL)
@@ -700,22 +702,22 @@ try:
             Receives a packet I/O notification from the IPmon thread
             """
             #print pkt
-        
+
             # turn on traffic 'LED' and mark time of receiving last pkt
             self.labTraffic.config(bg='green', fg=theme.labBgColor)
             self.lastPktTime = time.time()
-        
+
             # is this pkt info cached?
             src = pkt['src']
             sport = pkt['sport']
             dst = pkt['dst']
             dport = pkt['dport']
             plen = pkt['len']
-        
+
             cls = self.pktCache.get((src, sport, dst, dport), None)
-            
+
             cls = None # disable caching for now
-        
+
             if cls:
                 #print "on_packet: found in cache as class %s" % cls.name
                 cls.on_packet(src, sport, dst, dport, plen)
@@ -743,7 +745,7 @@ try:
                                 self.pktCache[src, sport, dst, dport] = cls
                                 cls.on_packet(src, sport, dst, dport, plen)
                                 return
-            
+
                         # is either src or dest matching iface's ip?
                         #print "ipaddr=%s src=%s dst=%s" % (repr(iface.ipaddr),repr(src),repr(dst))
                         if iface.ipaddr in (src, dst):
@@ -751,14 +753,14 @@ try:
                             #self.pktCache[src, sport, dst, dport] = iface.default
                             iface.default.on_packet(src, sport, dst, dport, plen)
                             return
-        
+
             print "unmatched packet %s:%s->%s:%s %s" % (src, sport, dst, dport, plen)
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
         #@-node:on_packet
         #@+node:on_refresh
         def on_refresh(self, ev=None):
@@ -770,21 +772,21 @@ try:
                 if time.time() - self.lastPktTime > 0.1:
                     # timeout - turn off traffic indicator label
                     self.labTraffic.config(bg=theme.labBgColor, fg=theme.labFgColor)
-        
+
                 # update rate totals on all classes
                 for clswid in self.classWidgetsList:
                     clswid.refreshRate()
-        
+
                 # update the 'router is running' checkbutton
                 self.varRunning.set(self.isRunning())
-        
+
                 # set up repeat callback
                 self.labTraffic.after(500, self.on_refresh)
-        
+
             except KeyboardInterrupt:
                 print "on_refresh: terminated by user"
                 sys.exit(0)
-        
+
             except:
                 traceback.print_exc()
                 return
@@ -796,34 +798,34 @@ try:
             """
             while 1:
                 time.sleep(1)
-        
+
                 try:
                     conns = TCPConns()
-            
+
                     #print "thrdConns: awaiting lock"
                     self.lockConns.acquire()
                     #print "thrdConns: got lock"
-        
-                    try:    
+
+                    try:
                         # forget previous connections for all classes
                         for iface in self.config.interfaces:
                             for cls in iface.classes:
                                 cls.conns = []
                             iface.default.conns = []
-                
+
                         # sort current connections into classes
                         #print "---- thrdConns ----"
                         for conn in conns:
                             #print "thrdConns: %s:%s %s:%s" % (conn.raddr, conn.rport, conn.laddr, conn.lport)
                             try:
                                 localip = conn.laddr
-                                
+
                                 # match against each rule
                                 for iface in self.config.interfaces:
                                     # ditch connections that aren't on this interface
                                     if iface.ipaddr != localip:
                                         continue
-                
+
                                     # try to match against all classes
                                     for cls in iface.classes:
                                         if cls.matches(conn):
@@ -831,25 +833,25 @@ try:
                                             #    cls.name, conn.laddr, conn.lport, conn.raddr, conn.rport)
                                             cls.conns.append(conn)
                                             raise MatchedConnectionException # bail out to uppermost loop
-                
+
                                     # no rule found for conn, add to default
                                     iface.default.conns.append(conn)
                                     break # quicker than raising exception
-                
+
                             except MatchedConnectionException:
                                 pass
-                
+
                         self.conns = conns
                     except:
                         traceback.print_exc()
-        
+
                     self.lockConns.release()
                     #print "thrdConns: released lock"
-            
+
                 except:
                     traceback.print_exc()
-            
-        
+
+
         #@-node:thrdConns
         #@-others
     #@-node:class TShaperGui
@@ -858,14 +860,14 @@ try:
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, label=None, tearoff=0, **args):
-        
+
             Menu.__init__(self, parent,
                           font="helvetica 10",
                           tearoff=tearoff,
                           **args)
             if label != None:
                 parent.add_cascade(label=label, menu=self)
-        
+
             self['bg'] = theme.menuBgColor
             self['fg'] = theme.menuFgColor
             self['font'] = theme.menuFont
@@ -888,29 +890,29 @@ try:
                              **args)
             if shortcut != None:
                 self.bind_all("<%s>" % shortcut, action)
-            
+
         #@-node:addCmd
         #@-others
     #@-node:class myMenu
     #@+node:class myPanedWidget
     class myPanedWidget(Pmw.PanedWidget):
-    
+
         def __init__(self, parent, **kwds):
-    
+
             handlesize = takeKey(kwds, 'handlesize', 0)
-    
+
             Pmw.PanedWidget.__init__(self,
                                      parent,
                                      handlesize=handlesize,
                                      **kwds)
-    
+
             self.component('hull').config(
                 bg=theme.frmBgColor,
                 highlightcolor=theme.frmBgColor,
                 highlightbackground=theme.frmBgColor,
                 )
             #self.component('Handle').configure(bg=theme.frmBgColor)
-    
+
         def add(self, name, **kw):
             pane = Pmw.PanedWidget.add(self, name, **kw)
             pane.config(
@@ -919,7 +921,7 @@ try:
                 highlightbackground=theme.frmBgColor,
                 )
             return pane
-    
+
     #@-node:class myPanedWidget
     #@+node:class myFrame
     class myFrame(Frame):
@@ -934,21 +936,21 @@ try:
                            highlightthickness=0,
                            **kw
                            )
-            
+
     #@-node:class myFrame
     #@+node:class myLabel
     class myLabel(Label):
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, **kw):
-        
+
             bg = takeKey(kw, 'bg', theme.labBgColor)
             fg = takeKey(kw, 'fg', theme.labFgColor)
             height = takeKey(kw, 'height', 1)
             font = takeKey(kw, 'font', theme.myFont)
-        
+
         	#print "theme.myFont = %s" % theme.myFont
-        
+
             Label.__init__(self, parent,
                            #font=font,
                            bg=bg,
@@ -956,24 +958,24 @@ try:
                            font=font,
                            #height=height,
                            **kw)
-        
-        
+
+
         #@-node:__init__
         #@-others
     #@-node:class myLabel
     #@+node:class myButton
-    
+
     class myButton(Button):
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, **kw):
-        
+
             bg = takeKey(kw, 'bg', theme.butBgColor)
             fg = takeKey(kw, 'fg', theme.butFgColor)
             font = takeKey(kw, 'font', theme.butFont)
             padx = takeKey(kw, 'padx', theme.butPadx)
             pady = takeKey(kw, 'pady', theme.butPady)
-        
+
             Button.__init__(self, parent,
                             font=font,
                             bg=bg,
@@ -999,7 +1001,7 @@ try:
         #@-others
     #@-node:class myButton
     #@+node:class myCheckbutton
-    
+
     class myCheckbutton(Checkbutton):
         #@    @+others
         #@+node:__init__
@@ -1007,10 +1009,10 @@ try:
             bg = takeKey(args, 'bg', theme.chkBgColor)
             fg = takeKey(args, 'fg', theme.chkFgColor)
             font = takeKey(args, 'font', theme.chkFont)
-        
+
             if sys.platform == 'win32':
                 theme.chkSelColor = theme.chkBgColor
-        
+
             Checkbutton.__init__(self, parent,
                                  onvalue=1, offvalue=0,
                                  bg=bg,
@@ -1024,28 +1026,28 @@ try:
                                  activeforeground=theme.chkActiveFgColor,
                                  activebackground=theme.chkActiveBgColor,
                                  **args)
-        
-        
-        
+
+
+
         #@-node:__init__
         #@-others
     #@-node:class myCheckbutton
     #@+node:class myEntry
-    
+
     class myEntry(Pmw.EntryField):
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, **args):
-            
+
             font = takeKey(args, 'font', theme.entryFont)
             bg = takeKey(args, 'bg', theme.entryBgColor)
             fg = takeKey(args, 'fg', theme.entryFgColor)
             width = takeKey(args, 'width', 8)
-            
+
             Pmw.EntryField.__init__(
                 self, parent,
                 **args)
-        
+
             try:
                 self.component('entry').config(
                     bg=bg,
@@ -1076,18 +1078,18 @@ try:
                     highlightbackground=theme.labBgColor,
                     insertbackground=fg,
                     )
-        
+
             self.component('hull').config(
                 bg=bg,
                 highlightcolor=fg,
                 highlightbackground=bg,
                 )
-        
+
             try:
                 lab = self.component('label')
             except:
                 return
-        
+
             #print "configuring label for field"
             if lab:
                 try:
@@ -1111,8 +1113,8 @@ try:
                         highlightcolor=theme.labBgColor,
                         highlightbackground=theme.labBgColor,
                         )
-                    
-        
+
+
         #@-node:__init__
         #@-others
     #@-node:class myEntry
@@ -1121,9 +1123,9 @@ try:
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, **args):
-        
+
             Pmw.ComboBox.__init__(self, parent, **args)
-        
+
             self.component('entryfield').component('entry').config(
                 background=theme.cmbBgColor,
                 foreground=theme.cmbFgColor,
@@ -1152,9 +1154,9 @@ try:
     Many many thanks to the author for saving me a couple
     of boring hours.
     """
-    
+
     from Tkinter import *
-    
+
     class myProgressBar:
         def __init__(self, master=None, orientation="horizontal",
                      min=0, max=100, width=100, height=18,
@@ -1163,7 +1165,7 @@ try:
                      labelColor="yellow", labelFont="Verdana",
                      labelText="", labelFormat="%d%%",
                      value=50, bd=2):
-    
+
             # preserve various values
             self.master = master
             self.orientation = orientation
@@ -1175,11 +1177,11 @@ try:
             if fillColor is None:
                 fillColor = theme.progbarFgColor
             self.fillColor = fillColor
-    
+
             self.labelFont = labelFont
             self.labelColor = labelColor
             self.background = theme.progbarBgColor
-    
+
             self.labelText=labelText
             self.labelFormat=labelFormat
             self.value=value
@@ -1202,41 +1204,41 @@ try:
                                                height / 2, text=labelText,
                                                anchor="c", fill=labelColor,
                                                font=self.labelFont)
-    
+
             self.span = self.max - self.min
-    
+
             self.update()
             self.canvas.pack(side='top', fill='x', expand='no')
-    
-    
+
+
         def updateProgress(self, newValue, newMax=None):
-    
+
             if newMax:
                 self.max = newMax
             self.value = newValue
             self.update()
-    
+
         def update(self):
-    
+
             # Trim the values to be between min and max
             value=self.value
             if value > self.max:
                 value = self.max
             if value < self.min:
                 value = self.min
-    
+
             span = self.span
             red = min(255, (value-self.min)*510/span)
             green = min(255, (self.max - value)*510/span)
             #print "level=%d, red=%d, green=%d" % (value, red, green)
-    
+
             # Adjust the rectangle
             if self.orientation == "horizontal":
                 self.canvas.coords(self.scale, 0, 0,
                   float(value) / self.max * self.width, self.height)
             else:
                 self.canvas.coords(self.scale, 0,
-                                   self.height - (float(value) / 
+                                   self.height - (float(value) /
                                                   self.max*self.height),
                                    self.width, self.height)
             # Now update the colors
@@ -1246,7 +1248,7 @@ try:
                 self.canvas.itemconfig(self.label, fill=self.labelColor)
                 if value:
                     if value >= 0:
-                        pvalue = int((float(value) / float(self.max)) * 
+                        pvalue = int((float(value) / float(self.max)) *
                                        100.0)
                     else:
                         pvalue = 0
@@ -1259,8 +1261,8 @@ try:
                 #self.canvas.itemconfig(self.label, text=self.labelFormat %
                 #                       self.labelText)
             self.canvas.update_idletasks()
-    
-    
+
+
     #@-node:class myProgressBar
     #@+node:class myCounter
     class myCounter(Pmw.Counter):
@@ -1270,20 +1272,20 @@ try:
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, **kwds):
-        
+
             self.callback = takeKey(kwds, 'command', None)
             self.datatype1 = takeKey(kwds, 'datatype', self.on_change)
-        
+
             self.min = kwds.get('entryfield_validate').get('min', 0)
             self.max = kwds.get('entryfield_validate').get('max', 100)
-        
+
             Pmw.Counter.__init__(self, parent, datatype=self.datatype1, **kwds)
-        
+
             #if self.callback:
             #    kw = {'command':self.on_change}
             #else:
             #    kw = {}
-        
+
             self.component('uparrow').config(
                 bg = theme.cntBgColor,
                 borderwidth=0,
@@ -1298,13 +1300,13 @@ try:
                 highlightcolor=theme.cntBgColor,
                 highlightbackground=theme.cntBgColor,
                 )
-        
+
             if self.on_change:
                 #self.component('downarrow').bind("<Button-1>", self.on_change)
                 #self.component('uparrow').bind("<Button-1>", self.on_change)
                 pass
-        
-        
+
+
             self.component('hull').config(
                 bg = theme.cntFgColor,
                 borderwidth=0,
@@ -1320,7 +1322,7 @@ try:
                 highlightcolor=theme.cntBgColor,
                 highlightbackground=theme.cntBgColor,
                 )
-        
+
         def on_change(self, text, factor, increment, *args):
             #print "on_change"
             val = int(text)
@@ -1331,12 +1333,12 @@ try:
                 return newval
             else:
                 return val
-        
+
         #@-node:__init__
         #@-others
     #@-node:class myCounter
     #@+node:class myScale
-    
+
     class myScale(Scale):
         #@    @+others
         #@+node:__init__
@@ -1352,7 +1354,7 @@ try:
     def myMessageBox(parent, title, message, icontype='warning', buttonlist=['OK'], defbutton=0):
         """
         myMessageBox - create and display a modal message dialog on the fly.
-    
+
         Arguments:
          - parent - parent window
          - title - text to put into window title bar
@@ -1366,7 +1368,7 @@ try:
                 parent.deiconify()
             except:
                 pass
-    
+
         dialog = Pmw.MessageDialog(
             parent,
             title=title,
@@ -1376,10 +1378,10 @@ try:
             iconpos='w',
             icon_bitmap=icontype,
             message_text=message)
-    
+
         #dialog.deiconify()
         #dialog.show()
-    
+
         dialog.interior().configure(bg=theme.winBgColor)
         dialog.component('message').config(fg=theme.myFgColor, bg=theme.winBgColor)
         dialog.component('icon').config(bg=theme.winBgColor)
@@ -1395,34 +1397,34 @@ try:
                        activebackground=theme.butActiveBgColor,
                        highlightbackground=theme.butBgColor,
                        )
-    
+
         dialog.bind("<Escape>", dialog.deactivate)
         dialog.bind("<space>", dialog.deactivate)
-    
+
         result = dialog.activate(geometry = 'centerscreenalways')
         if type(result) != type(""):
             result = buttonlist[defbutton]
-        
+
         #print "myMessageBox: result=%s" % repr(result)
         return result
-    
-    
-    
+
+
+
     #@-node:def myMessageBox
     #@+node:class WidgetListBoxItem
     class WidgetListBoxItem(Frame):
         """
         Base class for creating multi-widget items which can be displayed
         in WidgetListBox objects
-        
+
         Note that when you subclass this, you need to support the following
         methods:
             - setcolor - shades the item with a colour to indicate selection/deselection
             - on_select, on_deselect (optional)
-    
+
         When inserting your own widgets into a WidgetListBoxItem, you must instantiate
         them with this WidgetListBoxItem object as parent, then call L{self.addwidget}
-    
+
         Attributes you might be interested in:
             - widgets - a list of component widgets
             - parent - the WidgetListBox object into which this item has been inserted
@@ -1432,24 +1434,24 @@ try:
         def __init__(self, parent, *args, **kw):
             """
             Base constructor.
-            
+
             You should override this to populate the item with usable widgets, and
             make sure in your constructor to call this constructor.
-            
+
             Args:
                 - parent - the WidgetListBox object on which this item will be displayed
             """
-        
+
             # sanity check
             if not isinstance(parent, WidgetListBox):
                 raise Exception("parent must be an instance of WidgetListBox or subclass")
-        
+
             # grab style info
             self.bg = takeKey(kw, 'bg', getattr(parent, 'bg', '#ffffff'))
             self.fg = takeKey(kw, 'fg', getattr(parent, 'fg', '#000000'))
             self.bgsel = takeKey(kw, 'bgsel', getattr(parent, 'bgsel', '#8080ff'))
             self.fgsel = takeKey(kw, 'fgsel', getattr(parent, 'fgsel', '#000000'))
-        
+
             Frame.__init__(self, parent.frame, width=300, bg=self.bg)
             self.parent = parent
             self.widgets = []
@@ -1457,13 +1459,13 @@ try:
         #@-node:__init__
         #@+node:setselected
         def setselected(self, isSelected, ignore=0):
-        
+
             if isSelected:
                 # deselect prev selection
                 prev = self.parent.selected
                 if prev:
                     prev.setselected(0)
-        
+
                 # set selected style, invoke callback
                 self.parent.selected = self
                 self.setcolor('select')
@@ -1486,7 +1488,7 @@ try:
         def setcolor(self, state):
             """
             Sets the background of all items on this widget to color
-            
+
             Override this in your subclass
             """
             if state == 'select':
@@ -1507,23 +1509,23 @@ try:
                     wid.configure(color=fgcolor)
                 except:
                     traceback.print_exc()
-        
-        
-        
+
+
+
         #@-node:setcolor
         #@+node:addwidget
         def addwidget(self, wid, **kw):
             """
             Add a newly-created widget to your list item.
-        
+
             This will chain the widget in to the listbox item, so that it will
             receive appropriate bindings, and be appropriately styled when selected
             and deselected.
-            
+
             Arguments:
                 - wid - widget to add (must have been created with this WidgetListBoxItem object
                   as parent
-            
+
             Keywords:
                 - nobind - a list of binding names NOT to apply to this widget. One or more of:
                     - '<Button-1>'
@@ -1542,7 +1544,7 @@ try:
             #print "bg=%s" % bg
             wid.configure(bg=bg)
             wid.parent = self
-        
+
         #@-node:addwidget
         #@+node:refresh
         def refresh(self):
@@ -1551,30 +1553,30 @@ try:
             This propagates the change to the item's widgets
             """
             #print "WARNING: WidgetListItem.refresh() - you should subclass this"
-        
+
         #@-node:refresh
         #@+node:on_select
         def on_select(self):
             """
             Called whenever this widget is selected, whether through
             mouse or keyboard actions
-            
+
             Override as desired
             """
             #print "item selected"
-        
+
         #@-node:on_select
         #@+node:on_deselect
         def on_deselect(self):
             """
             Called whenever this widget is deselected, whether through
             mouse or keyboard actions
-            
+
             Override as desired
             """
             #print "item deselected"
-        
-        
+
+
         #@-node:on_deselect
         #@-others
     #@-node:class WidgetListBoxItem
@@ -1586,36 +1588,36 @@ try:
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, *args, **kw):
-        
+
             self.bg = takeKey(kw, 'bg', '#ffffff')
             self.bgsel = takeKey(kw, 'bgsel', '#c0c0ff')
             self.fgsel = takeKey(kw, 'fgsel', '#c0c0c0')
-        
+
             Pmw.ScrolledFrame.__init__(self, parent, *args, **kw)
-        
+
             items = takeKey(kw, 'items', ())
-        
+
             self.config(
                 bg=self.bg,
                 highlightbackground=self.bgsel,
                 )
-        
+
             if items:
                 self.setlist(items)
-        
+
             self.config(
                 bg=self.bg,
                 highlightbackground=self.bgsel,
                 )
-        
+
             self.frame = self.interior()
             self.view = self.component('clipper')
             self.view.configure(bg=self.bg)
             self.items = []
             self.selected = None
-        
-        
-        
+
+
+
         #@-node:__init__
         #@+node:clear
         def clear(self):
@@ -1626,10 +1628,10 @@ try:
         def get(self, first=None, last=None):
             """
             Similar to Pmw.ScrolledListBox.get()
-            
+
             Retrieves one, some or all the items in the list.
             Note that the items returned are widget refs
-            
+
             Arguments:
                 - first - index of first item to get. Omit to get all items
                 - last - index of last item to get. Omit to get just one item
@@ -1645,8 +1647,8 @@ try:
                 return self.items[first:]
             else:
                 return self.items[first:last]
-        
-                    
+
+
         #@nonl
         #@-node:get
         #@+node:getcurselection
@@ -1671,12 +1673,12 @@ try:
             """
             Toss all the items in the list, and replace them
             with a whole new list of items.
-            
+
             Each element of lst must be an instance of WidgetListBoxItem (or subclass)
             """
             # grab new items
             self.items = lst[:]
-        
+
             # redisplay
             self.refresh()
         #@-node:setlist
@@ -1684,7 +1686,7 @@ try:
         def setvalue(self, itemOrItems):
             """
             Sets the current selection for the WidgetListBox to itemOrItems
-            
+
             Argument:
                 - itemOrItems - either a single item (instance of WidgetListBoxItem or subclass),
                   or a sequence of such
@@ -1699,7 +1701,7 @@ try:
                 raise("Nonexistent item")
             else:
                 itemOrItems = [itemOrItems]
-            
+
             for item in itemOrItems:
                 self.selectItem(item)
         #@-node:setvalue
@@ -1714,17 +1716,17 @@ try:
         def on_select(self, item):
             """
             Callback which gets hit whenever an item gets selected
-            
+
             Override as desired
             """
             #print "WidgetListBox.on_select: item=%s, idx=%s" % (item, self.getItemIndex(item))
-        
+
         #@-node:on_select
         #@+node:on_deselect
         def on_deselect(self, item):
             """
             Callback which gets hit whenever an item gets deselected
-            
+
             Override as desired
             """
             try:
@@ -1732,38 +1734,38 @@ try:
             except:
                 idx = -1
             #print "WidgetListBox.on_deselect: item=%s, idx=%s" % (item, idx)
-        
+
         #@-node:on_deselect
         #@+node:append
         def append(self, item):
             """
             Append an item to the end of the list
-            
+
             Arguments:
                 - item - the item to append - must be instance of WidgetListBoxItem or subclass
-                
+
             Returns:
                 - the item appended, for your convenience, to let you use this method 'on the fly'
             """
             if not isinstance(item, WidgetListBoxItem):
                 raise Exception("Item must be an instance of WidgetListBoxItem or subclass")
-        
+
             self.items.append(item)
             self.refresh()
             return item
-        
+
         #@-node:append
         #@+node:delete
         def delete(self, idxOrItem):
             """
             Deletes an item from the end of the list
-            
+
             Arguments:
                 - idxOrItem - either a ref to an item currently on the list, or the
                   'index' of the item within the list
             """
             nitems = len(self.items)
-        
+
             # convert arg to an index, if needed
             if type(idxOrItem) == type(0):
                 idx = item
@@ -1773,17 +1775,17 @@ try:
                     idx = self.items.index(idxOrItem)
                 except:
                     raise Exception("Tried to delete item not present in list")
-        
+
             # range check
             if idx >= nitems:
                 raise Exception("out of range err: idx=%s, nitems=%s" % (idx, nelems))
-        
+
             # ditch the item
             self.items.pop(idx).pack_forget()
-        
+
             # update display
             self.refresh()
-        
+
             # try to select neighbouring item
             nitems -= 1
             if idx == nitems:
@@ -1796,25 +1798,25 @@ try:
         def insert(self, idx, item):
             """
             Inserts an item at an arbitrary position within the list
-            
+
             Arguments:
                 - idx - index at which to insert the item, or -1 to append to end
                 - item - the item to insert - must be instance of WidgetListBoxItem or subclass
-        
+
             Returns:
                 - the item appended, for your convenience, to let you use this method 'on the fly'
-            """    
+            """
             nelems = len(self.items)
             if idx == -1:
                 idx = nelems
             if idx > nelems or idx < 0:
                 raise Exception("out of range err: idx=%s, nitems=%s" % (idx, len(self.widgets)))
-        
+
             if not isinstance(item, WidgetListBoxItem):
                 raise Exception("Item must be an instance of WidgetListBoxItem or subclass")
-        
+
             #self.setItemBindings(item)
-        
+
             if idx == nelems:
                 # trivial - just append
                 self.items.append(item)
@@ -1822,19 +1824,19 @@ try:
             else:
                 # Stick this item in the list
                 self.items.insert(idx, item)
-        
+
             # update display
             # no need for refresh() to unpack everything - we've already done it
             self.refresh(clear=0)
-        
+
             return item
-        
+
         #@-node:insert
         #@+node:selectItem
         def selectItem(self, item):
             """
             Selects one item
-            
+
             Arguments:
                 - item - either an index on the list, or a ref to one of the items on the list.
                   Set to -1 to deselect all
@@ -1849,10 +1851,10 @@ try:
                     raise Exception("range error: item=%s, nitems=%s" % (item, nitems))
                 else:
                     item = self.items[item]
-        
+
             if not isinstance(item, WidgetListBoxItem):
                 raise Exception("Expected index or WidgetListBoxItem object, got a %s" % item.__class__)
-            
+
             item.setselected(1)
         #@-node:selectItem
         #@+node:getItemIndex
@@ -1868,11 +1870,11 @@ try:
         #@-node:getItemIndex
         #@+node:refresh
         def refresh(self, clear=1):
-        
+
             """
             Remove all items from display, sort the display, add items
             back to display.
-            
+
             Setting the arg 'clear' to 0 means don't do a pack_forget() on each
             of the items - this is only done from setlist()
             """
@@ -1883,17 +1885,17 @@ try:
                 while i < nitems:
                     self.items[i].pack_forget()
                     i += 1
-        
+
             # sort items if needed
             self.items.sort(self.compare)
-        
+
             # and filter to the ones we need to show
             self.showItems = filter(self.filter, self.items)
-        
+
             # pack and bind new items
             for item in self.showItems:
                 self.itemPackAndBind(item)
-        
+
             #print "trying to refresh WidgetListBox"
             self.reposition()
         #@nonl
@@ -1907,7 +1909,7 @@ try:
             #print "got click on widget: %s" % ev.widget.__class__
             wid = ev.widget
             wid.setselected(1)
-        
+
         #@-node:on_click
         #@+node:on_down
         def on_down(self, ev):
@@ -1918,7 +1920,7 @@ try:
             # sanity check - can't move past bottom
             if not self.selected:
                 return
-        
+
             wid = ev.widget
             try:
                 idx = self.showItems.index(wid)
@@ -1931,7 +1933,7 @@ try:
             #    idx = self.showItems.index(wid.parent)
             if idx < len(self.showItems) - 1:
                 self.showItems[idx+1].setselected(1)
-        
+
             self.scrollTo(idx)
         #@-node:on_down
         #@+node:on_up
@@ -1943,7 +1945,7 @@ try:
             # sanity check - can't move past top
             if not self.selected:
                 return
-        
+
             wid = ev.widget
             try:
                 idx = self.showItems.index(wid)
@@ -1956,53 +1958,53 @@ try:
             #    idx = self.showItems.index(wid.parent)
             if idx > 0:
                 self.showItems[idx-1].setselected(1)
-        
+
             self.scrollTo(idx)
-        
-        
+
+
         #@-node:on_up
         #@+node:scrollTo
         def scrollTo(self, idx):
             #print "scrollTo"
             self.yview('moveto', float(idx-3)/len(self.items))
-        
-        
+
+
         #@-node:scrollTo
         #@+node:scrollUp
         def scrollUp(self, ev=None):
             #print "scrollUp"
             self.yview('scroll', -0.33, 'pages')
-        
+
         #@-node:scrollUp
         #@+node:scrollUpPage
         def scrollUpPage(self, ev=None):
             #print "scrollUpPage"
             self.yview('scroll', -0.8, 'pages')
-        
+
         #@-node:scrollUpPage
         #@+node:scrollDown
         def scrollDown(self, ev=None):
             #print "scrollDown"
             self.yview('scroll', 0.33, 'pages')
-        
+
         #@-node:scrollDown
         #@+node:scrollLeft
         def scrollLeft(self, ev=None):
             #print "scrollLeft"
             self.xview('scroll', -0.33, 'pages')
-        
+
         #@-node:scrollLeft
         #@+node:scrollRight
         def scrollRight(self, ev=None):
             #print "scrollRight"
             self.xview('scroll', 0.33, 'pages')
-        
+
         #@-node:scrollRight
         #@+node:scrollDownPage
         def scrollDownPage(self, ev=None):
             #print "scrollDownPage"
             self.yview('scroll', 0.8, 'pages')
-        
+
         #@-node:scrollDownPage
         #@+node:itemPackAndBind
         def itemPackAndBind(self, item):
@@ -2011,7 +2013,7 @@ try:
             """
             #print "itemPackAndBind: item=%s" % item.__class__
             #print "isinstance=%s" % isinstance(item, WidgetListBoxItem)
-        
+
             if isinstance(item, WidgetListBoxItem):
                 for wid in item.widgets:
                     #print "packing item: %s" % wid.__class__
@@ -2020,11 +2022,11 @@ try:
             else:
                 pass
                 item.pack(side=LEFT, anchor=NE)
-        
+
             noBind = getattr(item, "noBind", [])
-        
+
             #print "noBind = %s" % noBind
-        
+
             for evtype, action in {'<Button-1>' : self.on_click,
                                    '<Down>'     : self.on_down,
                                    '<Up>'       : self.on_up,
@@ -2037,8 +2039,8 @@ try:
                                    }.items():
                 if evtype not in noBind:
                     item.bind(evtype, action)
-        
-        
+
+
         #@-node:itemPackAndBind
         #@+node:compare
         def compare(self, item1, item2):
@@ -2057,22 +2059,22 @@ try:
         def filter(self, item):
             """
             Used when filtering the view
-            
+
             You should override this if you want filtering, with your method returning
             1 if a given item should appear on the display
             """
             return 1
         #@-node:filter
         #@-others
-    
+
     #@-node:class WidgetListBox
     #@+node:class ClsListBoxItem
     class ClsListBoxItem(WidgetListBoxItem):
-    
+
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, iface, cls, **kw):
-            
+
             WidgetListBoxItem.__init__(self, parent,
                                        bg=theme.listBgColor,
                                        fg=theme.listFgColor,
@@ -2086,16 +2088,16 @@ try:
                 highlightcolor=theme.listFgColor,
                 highlightbackground=theme.listFgColor,
                 )
-        
+
             gui = kw['gui']
-        
+
             # flag turns guages on/off
             showGuages = False
-        
+
             self.iface = iface
             self.cls = cls
             clsNameWidth = takeKey(kw, 'clsNameWidth', 6)
-        
+
             # add cls name label
             self.labName = myLabel(
                 self,
@@ -2107,23 +2109,23 @@ try:
                 anchor=W,
                 width=clsNameWidth,
                 )
-        
+
             #self.addwidget(self.labName, nobind=[])
             #self.labSvcName.config(justify=LEFT)
             self.labName.pack(side=LEFT, anchor=NW, fill=Y, expand=1)
-        
+
             # frame for ingress and egress widgets
             frmInOut = self.frmInOut = myFrame(self)
             frmInOut.pack(side=LEFT, fill=X, expand=1)
             #self.addwidget(frmInOut)
-            
+
             # ingress frame
             frmIn = self.frmIn = myFrame(frmInOut)
             frmIn.pack(side=TOP, fill=X, expand=1)
-        
+
             labIn = myLabel(frmIn, text="RX(max): ", width=8, justify=LEFT)
             labIn.pack(side=LEFT, anchor=W)
-        
+
             # add counter for incoming
             s = self.cntIn = myCounter(
                 frmIn,
@@ -2134,7 +2136,7 @@ try:
                 )
             s.pack(side=LEFT)
             #self.addwidget(s)
-        
+
             if showGuages:
                 # add guages for incoming - moving average 5 and 25
                 frmInGuages = myFrame(frmIn)
@@ -2161,19 +2163,19 @@ try:
                 self.labRateIn = myLabel(frmIn, text='')
                 self.labRateIn.pack(side=LEFT, anchor=W, fill=X, expand=1)
                 #self.labRateIn.pack(side=RIGHT, anchor=SE)
-            
+
             # egress frame
             frmOut = self.frmOut = myFrame(frmInOut)
             frmOut.pack(side=TOP, fill=X, expand=1)
-        
+
             frmOutG = myFrame(frmOut)
             frmOutG.pack(side=LEFT, fill=X, expand=1)
-            
+
             labOutMin = myLabel(frmOutG, text="TX(min):", width=8, justify=LEFT)
             labOutMin.grid(row=0, column=0)
             labOutMax = myLabel(frmOutG, text="TX(max):", width=8, justify=LEFT)
             labOutMax.grid(row=1, column=0)
-        
+
             # add counters for outgoing min/max
             s = self.cntOutMin = myCounter(
                 frmOutG,
@@ -2183,7 +2185,7 @@ try:
                 command=gui.on_changeValue,
                 )
             s.grid(row=0, column=1)
-        
+
             s = self.cntOutMax = myCounter(
                 frmOutG,
                 entry_width=4,
@@ -2192,7 +2194,7 @@ try:
                 command=gui.on_changeValue,
                 )
             s.grid(row=1, column=1)
-        
+
             # add guages for outgoing - moving average 5 and 25
             if showGuages:
                 frmOutGuages = myFrame(frmOut)
@@ -2219,16 +2221,16 @@ try:
                 self.labRateOut = myLabel(frmOut, text='')
                 self.labRateOut.pack(side=LEFT, anchor=W, fill=X, expand=1)
                 #self.labRateOut.configure(bg='blue')
-        
-        
-        
-        
+
+
+
+
         #@-node:__init__
         #@+node:setcolor
         def setcolor(self, state):
             """
             Sets the background of all items on this widget to color
-            
+
             Override this in your subclass
             """
             if state == 'select':
@@ -2245,7 +2247,7 @@ try:
                 fgcolor = "#00ff00"
                 bgcolor = "#ffe040"
             self.configure(bg=bgcolor)
-        
+
             if 0:
                 for wid in self.widgets:
                     wid.configure(background=bgcolor)
@@ -2253,7 +2255,7 @@ try:
                         wid.configure(fg=fgcolor)
                     except:
                         traceback.print_exc()
-        
+
             if state == 'select':
                 color = self.bgsel
                 #print "setting color to %s" % color
@@ -2277,65 +2279,65 @@ try:
             This propagates the change to the item's widgets
             """
             #print "WARNING: WidgetListItem.refresh() - you should subclass this"
-        
+
         #@-node:refresh
         #@+node:refreshRate
         def refreshRate(self):
-        
+
             #print "refreshRate: %s" % self.iface.name+"."+self.cls.name
             #return
-        
+
             cls = self.cls
-        
+
             # mad-assed kludge - feed in some 'null' packets to cls to flush out the
             # class' history
             cls.on_packet(0, 0, 0, 0, 0)
-        
+
             #if cls.name == 'httpout' and cls.silly != 'xxx':
             #    print "%s.%s: rate = %s b/s in, %s b/s out, %s" % (
             #        cls.parent.name, cls.name, cls.rateIn, cls.rateOut, cls.silly)
-            
+
             self.labRateIn.config(text="%16.2f" % (cls.rateIn / 128))
             self.labRateOut.config(text="%16.2f" % (cls.rateOut / 128))
-        
-        
-        
-        
+
+
+
+
         #@-node:refreshRate
         #@+node:on_select
         def on_select(self):
             """
             Called whenever this widget is selected, whether through
             mouse or keyboard actions
-            
+
             Override as desired
             """
             #print "item selected"
-        
+
         #@-node:on_select
         #@+node:on_deselect
         def on_deselect(self):
             """
             Called whenever this widget is deselected, whether through
             mouse or keyboard actions
-            
+
             Override as desired
             """
             #print "item deselected"
-        
-        
+
+
         #@-node:on_deselect
         #@-others
-    
+
     #@-node:class ClsListBoxItem
     #@+node:class ClsListBox
     class ClsListBox(WidgetListBox):
-        
+
         #@    @+others
         #@+node:__init__
         def __init__(self, parent, gui, **kw):
-        
-            kw['bg'] = theme.myListBgColor    
+
+            kw['bg'] = theme.myListBgColor
             WidgetListBox.__init__(self, parent, **kw)
             self.gui = gui
             #self.services = {}
@@ -2347,7 +2349,7 @@ try:
             """
             #print "SvcListBox.on_select: item=%s, idx=%s" % (item, self.getItemIndex(item))
             #print "SvcListBox.on_select: item=%s" % item.svcName
-        
+
         #@-node:on_select
         #@+node:on_deselect
         def on_deselect(self, item):
@@ -2360,17 +2362,17 @@ try:
                 idx = -1
             #print "WidgetListBox.on_deselect: item=%s, idx=%s" % (item, idx)
             #print "SvcListBox.on_deselect: item=%s, idx=%s" % (item, self.getItemIndex(item))
-        
+
             #print "SvcListBox.on_deselect: item=%s, index=%s" % (item.svcName, idx)
-        
-        
+
+
         #@-node:on_deselect
         #@-others
-    
+
     #@-node:class ClsListBox
     #@+node:class theme
     class theme:
-        
+
         #@    @+others
         #@+node:theme attributes
         myBgColor = "#404040"
@@ -2384,29 +2386,29 @@ try:
         myFgColorActive = "#ffffff"
         myBgColorActive = "#0000ff"
         myDisabledColor = "#c0c0c0"
-        
+
         myFont = "helvetica 11"
         myFontHeading = "helvetica 11 bold"
-        
+
         myFontWindows = "helvetica 8"
         myFontHeadingWindows = "helvetica 10 bold"
-        
+
         # widget-specific settings
-        
+
         grpRingColor = myFgColor
-        
+
         winBgColor = myBgColor
         winFgColor = myFgColor
-        
+
         menuBgColor = myBgColor
         menuFgColor = myFgColor
         menuFont = myFont
         menuFontWindows = myFontWindows
         menuActiveBgColor = myBgColorActive
         menuActiveFgColor = myFgColorActive
-        
+
         frmBgColor = myBgColor
-        
+
         butFont = myFont
         butFontWindows = myFontWindows
         butBgColor = myBgColor
@@ -2419,43 +2421,43 @@ try:
         butHighlightBgColor = myBgColorActive
         butPadx = 4
         butPady = 2
-        
+
         tkDisabledFgColor = myDisabledColor
         tkInsBgColor = "#808080"
         tkTroughColor = "#9999ff"
-        
+
         listBgColor = myBgColor
         listFgColor = myListFgColor
         listSelBgColor = myListSelBgColor
         listSelFgColor = myListSelFgColor
         listFont = myFont
         listFontWindows = myFontWindows
-        
+
         labBgColor = myBgColor
         labFgColor = myFgColor
         labFont = myFont
         labFontWindows = myFontWindows
-        
+
         scrlBgColor = myBgColor
         scrlBgActiveColor = myBgColorActive
-        
+
         chkBgColor = myBgColor
         chkFgColor = myFgColor
         chkFont = myFont
         chkFontWindows = myFontWindows
         #chkSelColor = mySelColor
         chkSelColor = "green"
-        
+
         chkActiveFgColor = myFgColorActive
         chkActiveBgColor = myBgColorActive
-        
+
         entrySelColor = mySelColor
         entryBgColor = myBgColor1
         entryFgColor = myFgColor
         entryDisabledFgColor = "#000000"
         entryFont = myFont
         entryFontWindows = myFontWindows
-        
+
         textBgColor = myBgColor1
         textFgColor = myFgColor
         textFont = myFont
@@ -2463,17 +2465,17 @@ try:
         textFgColor = myFgColor
         textSelBgColor = mySelColor
         textSelFgColor = myFgColor
-        
+
         cmbBgColor = myBgColor
         cmbFgColor = myFgColor
         cmbSelBgColor = mySelColor
         cmbSelFgColor = myFgColor
         cmbFont = myFont
         cmbFontWindows = myFontWindows
-        
+
         cntBgColor = myBgColor
         cntFgColor = myFgColor
-        
+
         radBgColor = myBgColor
         radFgColor = myFgColor
         radFont = myFont
@@ -2481,7 +2483,7 @@ try:
         radSelColor = mySelColor
         radActiveBgColor = myFgColor
         radActiveFgColor = myBgColor
-        
+
         progbarMyTypingColor = "black"
         progbarPeerTypingColor = "#d0d0d0"
         progbarErrorColor = "red"
@@ -2491,7 +2493,7 @@ try:
         progbarFgColor = "#0000ff"
         #progbarVoxSendFgColor = "black"
         #progbarVoxSendBgColor = "#808080"
-        
+
         #@-node:theme attributes
         #@-others
     #@-node:class theme
@@ -2505,102 +2507,102 @@ class IPmon:
     #@	@+others
     #@+node:__init__
     def __init__(self, handler=None):
-    
+
         if not handler:
             handler = self.defaultHandler
         self.handler = handler
-    
+
         self.conns = {}
     #@-node:__init__
     #@+node:run
     def run(self):
-    
+
         reSpaces = re.compile("\\s+")
         tOut, tIn = popen2.popen2("tcpdump -vnl", 1024)
-    
+
         while 1:
             try:
                 line = line0 = tOut.readline().strip()
-    
+
                 #print line
                 #continue
-    
+
                 line = reSpaces.split(line, 1)[1]
-    
+
                 if line.startswith("arp"):
                     continue
-    
+
                 try:
                     addrs, rest = line.split(":", 1)
                 except:
                     continue
-        
+
                 addrs = addrs.strip()
                 src, dst = addrs.split(" > ")
-        
+
                 # print "src=%s dst=%s" % (repr(src), repr(dst))
-    
+
                 srcbits = src.split(".")
                 src = ".".join(srcbits[:4])
                 if len(srcbits) == 5:
                     sport = int(srcbits[-1])
                 else:
                     sport = 0
-        
+
                 dstbits = dst.split(".")
                 dst = ".".join(dstbits[:4])
                 if len(dstbits) == 5:
                     dport = int(dstbits[-1])
                 else:
                     dport = 0
-    
+
                 pktlen = int(rest[:-1].split(" ")[-1])
-        
+
                 # print "---------------------------"
                 # print line
-    
+
                 k = '%s:%s>%s:%s' % (src,sport,dst,dport)
                 conns = self.conns
                 if not conns.has_key(k):
                     conns[k] = 0
                 conns[k] += pktlen
-                
-    
+
+
                 pkt = {'src':src, 'sport':sport,
                        'dst':dst, 'dport':dport,
                        'len':pktlen, 'total':conns[k]}
                 #print "IPmon: pkt=%s" % pkt
                 self.handler(pkt)
-    
+
             except KeyboardInterrupt:
                 print "IPmon: got kbd int"
                 return
-    
+
             except:
                 #traceback.print_exc()
                 #print "IPmon exception"
                 #print line0
                 pass
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
     #@-node:run
     #@+node:runPcap
     def runPcap(self):
-    
+
         p = pcap.pcapObject()
         dev = "eth0"
-    
+
         net, mask = pcap.lookupnet(dev)
         # note:  to_ms does nothing on linux
         p.open_live(dev, 1600, 0, 100)
         # p.dump_open('dumpfile')
-    
+
         #p.setfilter(string.join(sys.argv[2:],' '), 0, 0)
-    
+
         # try-except block to catch keyboard interrupt.  Failure to shut
         # down cleanly can result in the interface not being taken out of promisc.
         # mode
@@ -2618,10 +2620,10 @@ class IPmon:
     #@-node:runPcap
     #@+node:pcapCallback
     def pcapCallback(self, pktlen, data, timestamp):
-    
+
         if not data:
             return
-    
+
         if data[12:14]=='\x08\x00':
             decoded = self.pcapDecode(data[14:])
             print '\n%s.%f %s > %s' % (time.strftime('%H:%M',
@@ -2635,7 +2637,7 @@ class IPmon:
     #@-node:pcapCallback
     #@+node:pcapDecode
     def pcapDecode(self, s):
-    
+
         d={}
         d['version']=(ord(s[0]) & 0xf0) >> 4
         d['header_len']=ord(s[0]) & 0x0f
@@ -2658,7 +2660,7 @@ class IPmon:
     #@-node:pcapDecode
     #@+node:defaultHandler
     def defaultHandler(self, pkt):
-    
+
         print "%s:%s => %s:%s %s %s" % (pkt['src'], pkt['sport'],
                                      pkt['dst'], pkt['dport'],
                                      pkt['len'], pkt['total'])
@@ -2674,30 +2676,30 @@ class TShaper:
     #@+node:attribs
     dir = configDir
     configPath = configPath
-    
+
     shaperPeriod = shaperPeriod # do a shaping run every few seconds
-    
+
     debug = False
     verbosity = verbosity
-    
+
     #@-node:attribs
     #@+node:__init__
     def __init__(self, *args, **kw):
-    
+
         # ensure we are root
         if os.getuid() != 0:
             raise Exception("You must be root to run this program")
-    
+
         # reload sentinel
         self.reloadFlag = False
-    
+
         # load initial config
         self.config = ShaperConfig(os.environ.get("PYSHAPERCONFIG", None))
         self.shaperPeriod = self.config.shaperPeriod
-    
+
         self.verbosity = kw.get('verbosity', self.verbosity)
         self.debug = kw.get('debug', self.debug)
-    
+
         # set up 'queue' of commands to execute, if not verbose
         if not self.debug:
             self.cmdq = []
@@ -2705,8 +2707,8 @@ class TShaper:
             self.cmdBufOld = ''
             self.cmdBufHash = ''
             self.cmdBufHashOld = ''
-    
-    
+
+
     #@-node:__init__
     #@+node:run
     def run(self):
@@ -2717,36 +2719,36 @@ class TShaper:
         """
         # terminate sentinel
         self.quitFlag = False
-    
+
         # reload sentinel
         self.reloadFlag = False
-    
+
         # check for existing instance
         if os.path.isfile(pidfile):
             print "pyshaper pid file %s exists, pyshaper is likely running" % pidfile
             print "If you are sure pyshaper is not running, delete this"
             print "file and try again"
             sys.exit(1)
-    
+
         #print self.config
-    
+
         # create pidfile
         file(pidfile, "w").write(str(os.getpid()))
-    
+
         # enable signal handler
         signal.signal(signal.SIGQUIT, self.sigHandler)
         signal.signal(signal.SIGHUP, self.sigHandler)
         signal.signal(signal.SIGTERM, self.sigHandler)
-    
+
         self.log(2, "version %s now running on %s second cycle..." % (
             version, self.config.shaperPeriod))
-    
+
         try:
             while not self.quitFlag:
-    
+
                 # do a run of shaping
                 self.setupShaping()
-                
+
                 # wait a bit
                 i = 0
                 while i < self.shaperPeriod:
@@ -2761,19 +2763,19 @@ class TShaper:
                         break
                     time.sleep(1)
                     i += 1
-            
+
         except KeyboardInterrupt:
             # user pressed control-C - remove shaping
             print "Shaping terminated by keyboard interrupt"
-    
+
         except:
             traceback.print_exc()
             print "pyshaper terminated"
-    
+
         else:
             # quit flag got set
             print "Shaping terminated by kill signal"
-    
+
         self.terminateShaping(immediate=True)
         try:
             os.unlink(pidfile)
@@ -2782,7 +2784,7 @@ class TShaper:
     #@-node:run
     #@+node:sigHandler
     def sigHandler(self, signum, frame):
-        
+
         if signum in [signal.SIGQUIT, signal.SIGTERM]:
             self.quitFlag = True
         elif signum == signal.SIGHUP:
@@ -2796,12 +2798,12 @@ class TShaper:
         """
         # get table of current connections
         self.currentConns = TCPConns()
-    
+
         #self.currentConns.dump()
-    
+
         # set up the dynamic shaping
         self.setupDynamic()
-    
+
     #@-node:setupShaping
     #@+node:setupDynamic
     def setupDynamic(self):
@@ -2811,9 +2813,9 @@ class TShaper:
         """
         # start the minor class ids at 100
         next_clsid = 100
-        
+
         self.log(3, "---------- setupDynamic: start ------------")
-    
+
         # first pass - backup connections lists, sort classes into static and dynamic
         for iface in self.config.interfaces:
             for cls in iface.classes:
@@ -2821,26 +2823,26 @@ class TShaper:
                 cls.conns = []
             iface.default.oldconns = iface.default.conns
             iface.default.conns = []
-    
+
             iface.staticClasses = filter(lambda c:c.mode == 'static', iface.classes)
-    
+
         # second pass - classify all connections
         for conn in self.currentConns:
             #print conn.laddr, conn.lport, conn.raddr, conn.rport
             try:
                 localip = conn.laddr
-                
+
                 # match against each rule
                 for iface in self.config.interfaces:
                     # ditch connections that aren't on this interface
                     if iface.ipaddr != localip:
                         continue
-    
+
                     # ignore connection if it matches a static class
                     for cls in iface.staticClasses:
                         if cls.matches(conn):
                             raise MatchedConnectionException
-    
+
                     # try to match against all classes
                     for cls in iface.classes:
                         if cls.matches(conn):
@@ -2851,34 +2853,34 @@ class TShaper:
                     # no rule found for conn, add to default
                     iface.default.conns.append(conn)
                     break # quicker than raising exception
-    
+
             except MatchedConnectionException:
                 pass
-    
+
         # third pass - generate/execute shaping commands
         for iface in self.config.interfaces:
             dev = iface.name
-    
+
             # clear out dev
             self.tcResetDev(dev)
-    
+
             # basic interface setup
             self.tcAddQdisc(dev, "root handle 1: htb default 1000")
             self.tcAddClassHtb(dev=dev, parent="1:", classid="1:1", pri=1, rate=iface.bwOut)
             self.tcAddQdisc(dev, "ingress handle ffff:")
-        
+
             nextCls = 100
-    
+
             # set up shaping for each class
             for cls in iface.classes:
                 nextCls += 1
-    
+
                 # bail if not static and no matching rules
                 if cls.mode != 'static' and not cls.conns:
                     continue
-    
+
                 # we have either static and/or dynamic defs
-    
+
                 # create an htb class with sfq
                 self.tcAddHtbAndSfq(
                     dev=dev,
@@ -2889,7 +2891,7 @@ class TShaper:
                     rate=cls.bwOutRate,
                     ceil=cls.bwOutCeil,
                     )
-    
+
                 if cls.mode == 'static':
                     # add egress filter
                     matches = []
@@ -2900,7 +2902,7 @@ class TShaper:
                     if cls.lport:
                         matches.append("src %s" % iface.ipaddr)
                         matches.append("sport %s 0xffff" % cls.lport)
-        
+
                     self.tcAddFilterOut(
                         dev=dev,
                         parent="1:",
@@ -2908,7 +2910,7 @@ class TShaper:
                         pri=cls.pri,
                         matches=matches
                         )
-        
+
                     # add ingress policer
                     matches = []
                     if cls.raddr:
@@ -2918,7 +2920,7 @@ class TShaper:
                     if cls.lport:
                         matches.append("dst %s" % iface.ipaddr)
                         matches.append("dport %s 0xffff" % cls.lport)
-        
+
                     self.tcAddFilterIngressPolice(
                         dev=dev,
                         rate=cls.bwIn,
@@ -2927,20 +2929,20 @@ class TShaper:
                         matches=matches,
                         index=nextCls,
                         )
-    
+
                 # set up dynamic rules, if current conns match
                 if cls.conns:
-    
+
                     # put the connections into a deterministic order
                     cls.sortConnections()
-        
+
                     # split up input bandwidth evenly amongst each connection
                     bwInPerConn = float(cls.bwIn) / len(cls.conns)
-        
+
                     for conn in cls.conns:
-        
+
                         self.log(4, "%s.%s" % (dev, cls.name))
-        
+
                         # add egress filter
                         self.tcAddFilterOut(
                             dev=dev,
@@ -2954,7 +2956,7 @@ class TShaper:
                                 "dport %s 0xffff" % conn.rport,
                                 ],
                             )
-        
+
                         # add ingress policer
                         self.tcAddFilterIngressPolice(
                             dev=dev,
@@ -2969,19 +2971,19 @@ class TShaper:
                                 ],
                             index=nextCls,
                             )
-    
+
             # set up interface default
             self.log(4, "DEFAULT for %s" % dev)
             default = iface.default
             self.tcAddHtbAndSfq(
                 dev=dev, parent="1:1", classid="1:1000", handle="1000:",
                 pri=default.pri, rate=default.bwOutRate, ceil=default.bwOutCeil)
-    
+
             #self.tcAddFilterOut(
             #    dev=dev, parent="1:", flowid="1:1000",
             #    pri=default.pri, matches=["dst 0.0.0.0/0"])
             self.log(4, "DONE DEFAULT for %s" % dev)
-    
+
             # if non-verbose, then we've got a shitload of commands to execute
             # and we need to pipe them in bulk to a shell
             if not self.debug:
@@ -2990,32 +2992,32 @@ class TShaper:
     #@-node:setupDynamic
     #@+node:runCmdQ
     def runCmdQ(self):
-    
+
         # build a single string out of all the queued cmds
         self.cmdBuf = "\n".join(self.cmdq)+"\n"
         self.cmdBufHash = sha.new(self.cmdBuf).hexdigest()
         self.cmdq = []
-    
+
         # bail if the command set hasn't changed
         self.log(4, "oldCmdBuf=%s" % self.cmdBufHashOld)
         self.log(4, "newCmdBuf=%s" % self.cmdBufHash)
-    
+
         if self.cmdBuf == self.cmdBufOld:
             self.log(3, "runCmdQ: no change to tc command set - bailing")
             return
         if self.cmdBufOld != '':
             self.log(2, "connections have changed, rebuilding qdiscs")
-    
+
         # fire off the commands to a shell child proc
         shOut, shIn = popen2.popen4("/bin/sh")
         shIn.write(self.cmdBuf)
         shIn.close()
         out = shOut.read()
         shOut.close()
-    
+
         # save the command buf for future comparison
         self.cmdBufOld = self.cmdBuf
-    
+
         # for debugging
         self.log(3, "SCRIPT:\n%sOUT:\n%s" % (self.cmdBuf, out))
     #@-node:runCmdQ
@@ -3023,20 +3025,20 @@ class TShaper:
     def terminateShaping(self, immediate=False):
         """clean existing down- and uplink qdiscs, hide errors"""
         #tc = self.tc
-    
+
         for iface in self.config.interfaces:
             self.tcResetDev(iface.name, immediate=immediate)
-            
+
         #tc("qdisc del DEV root")
         #tc("qdisc del DEV ingress")
-    
+
     #@-node:terminateShaping
     #@+node:status
     def status(self):
-    
+
         tc = self.tc
         DEV = self.dev
-    
+
         raw = tc("-s qdisc ls DEV") + tc("-s class ls DEV")
         return raw
     #@-node:status
@@ -3044,10 +3046,10 @@ class TShaper:
     def tc(self, cmd, **kw):
         #cmd = "tc "+(cmd.replace("DEV", "dev "+self.dev))
         cmd = "tc "+cmd
-    
+
         # creating a queue of commands
         self.cmdq.append(cmd)
-    
+
         # in debug mode, we execute commands and report their results one at a time
         if self.debug or kw.get('immediate', False):
             self.log(3, cmd)
@@ -3058,40 +3060,40 @@ class TShaper:
     #@-node:tc
     #@+node:tcResetDev
     def tcResetDev(self, dev, immediate=False):
-        
+
         tcDelQdisc = self.tcDelQdisc
-    
+
         tcDelQdisc(dev, "root", immediate=immediate)
         tcDelQdisc(dev, "ingress", immediate=immediate)
     #@-node:tcResetDev
     #@+node:tcDelQdisc
     def tcDelQdisc(self, dev, name, immediate=False):
-        
+
         self.tc("qdisc del dev %s %s" % (dev, name), immediate=immediate)
     #@-node:tcDelQdisc
     #@+node:tcAddQdisc
     def tcAddQdisc(self, dev, *args):
-    
+
         self.tc("qdisc add dev %s %s" % (dev, " ".join(args)))
-    
-    
+
+
     #@-node:tcAddQdisc
     #@+node:tcAddQdiscSfq
     def tcAddQdiscSfq(self, dev, parent, handle, perturb=10):
-    
+
         self.tcAddQdisc(dev, "parent %s handle %s sfq perturb %s" % (parent, handle, perturb))
-    
+
     #@-node:tcAddQdiscSfq
     #@+node:tcAddClass
     def tcAddClass(self, dev, *args):
-    
+
         self.tc("class add dev %s %s" % (dev, " ".join(args)))
-    
-    
+
+
     #@-node:tcAddClass
     #@+node:tcAddClassHtb
     def tcAddClassHtb(self, dev, parent, classid, pri, rate, ceil=None):
-    
+
         if ceil:
             self.tcAddClass(
                 dev,
@@ -3104,27 +3106,27 @@ class TShaper:
                 "parent %s classid %s htb rate %s burst 6k prio %s" % (
                     parent, classid, int(rate * 1024), pri)
                 )
-    
+
     #@-node:tcAddClassHtb
     #@+node:tcAddHtbAndSfq
     def tcAddHtbAndSfq(self, dev, parent, classid, handle, pri, rate, ceil=None):
-    
+
         if not ceil:
             ceil = self.config.interfaces[dev].bwOut
-    
+
         self.tcAddClassHtb(dev=dev, parent=parent, classid=classid, pri=pri, rate=rate, ceil=ceil)
         self.tcAddQdiscSfq(dev=dev, parent=classid, handle=handle)
     #@-node:tcAddHtbAndSfq
     #@+node:tcAddFilter
     def tcAddFilter(self, dev, *args):
-    
+
         self.tc("filter add dev %s %s" % (dev, " ".join(args)))
-    
-    
+
+
     #@-node:tcAddFilter
     #@+node:tcAddFilterOut
     def tcAddFilterOut(self, dev, parent, flowid, pri, matches):
-    
+
         self.tcAddFilter(
             dev,
             "parent %s" % parent,
@@ -3132,17 +3134,17 @@ class TShaper:
             " ".join(["match ip "+m for m in matches]),
             "flowid %s" % flowid,
             )
-    
+
         #tcAddFilter(self.dev, "parent 1: protocol ip prio 18 u32 match ip dst 0.0.0.0/0 flowid 1:10")
     #@-node:tcAddFilterOut
     #@+node:tcAddFilterIngressPolice
     def tcAddFilterIngressPolice(self, dev, rate, pri, flowid, matches, index):
-    
+
         #if ingressMethod == 'share':
         #    indexfld = "index %s" % index
         #else:
         #    indexfld = ''
-            
+
         self.tcAddFilter(
             dev,
             "parent ffff: protocol ip prio %s" % pri,
@@ -3155,7 +3157,7 @@ class TShaper:
     #@-node:tcAddFilterIngressPolice
     #@+node:log
     def log(self, level, msg):
-    
+
         if level > self.verbosity:
             return
         print "pyshaper: %s" % msg
@@ -3170,7 +3172,7 @@ class ShaperConfig:
     #@    @+others
     #@+node:attribs
     path = configPath
-    
+
     forbidden = [
          'in',
          'out',
@@ -3185,26 +3187,26 @@ class ShaperConfig:
          'name',
          'parent',
          ]
-    
+
     shaperPeriod = shaperPeriod
-    
+
     guiWidth = 200
     guiHeight = 200
     dontSave = False
     #@-node:attribs
     #@+node:__init__
     def __init__(self, path=None):
-    
+
         self.reSpaces = re.compile("\\s+")
-        
+
         if path:
            self.path = path
-    
+
         if not os.path.isfile(self.path):
             raise Exception("Missing config file %s" % path)
-    
+
         self.load()
-    
+
         self.hasChanged = True
     #@-node:__init__
     #@+node:load
@@ -3214,20 +3216,20 @@ class ShaperConfig:
         """
         reComment = re.compile("#(.*)(\\n|$)")
         raw = file(self.path).read().strip()
-    
+
         self.interfacesdict = {}
         self.interfaces = []
-    
+
         # rip comments
         raw = reComment.sub("\n", raw)
-    
+
         # join broken lines
         raw = re.sub("\\\\(\\s*)", "", raw)
-    
+
         # break into lines, strip the lines, toss empties
         lines = [line.strip() for line in raw.split("\n")]
         lines = filter(lambda l: l != '', lines)
-    
+
         cmds = []
         for line in lines:
             try:
@@ -3237,20 +3239,20 @@ class ShaperConfig:
                 traceback.print_exc()
                 raise Exception("Invalid line '%s' in config file %s" % (line, self.path))
         #print cmds
-    
+
         # now the hard bit - make sense of these lines and stick them into rules base
         for item, val in cmds:
             self.execute(item, val)
-    
+
     #@-node:load
     #@+node:execute
     def execute(self, item, val=None):
-        
+
         if val is None:
             item, val = self.reSpaces.split(item, 1)
-    
+
         #print repr(item), repr(val)
-    
+
         if item == 'period':
             self.shaperPeriod = int(val)
             return
@@ -3260,22 +3262,22 @@ class ShaperConfig:
         elif item == 'guiheight':
             self.guiHeight = int(val)
             return
-    
+
         try:
             ifname, rest = item.split(".", 1)
         except:
             print "Bad line in %s: %s %s" % (self.path, item, val)
             raise
-        
+
         if ifname in self.forbidden:
             raise Exception("Illegal interface name '%s'" % ifname)
-    
+
         # get interface rec, create if not previously known
         ifrec = self.interfacesdict.get(ifname, None)
         if not ifrec:
             ifrec = self.interfacesdict[ifname] = ShaperConfigIface(ifname)
             self.interfaces.append(ifrec)
-    
+
         # process magic names
         if rest == 'in':
             ifrec.bwIn = float(val)
@@ -3286,20 +3288,20 @@ class ShaperConfig:
         if rest == 'ip':
             ifrec.ipaddr = val
             return
-    
+
         # not magic - take as class name
         #print "rest=%s" % repr(rest)
         clsname, rest = rest.split(".", 1)
-    
+
         if clsname in self.forbidden:
             raise Exception("Illegal class name '%s.%s'" % (ifname, clsname))
-    
+
         # get class rec, create if not previously known
         clsrec = ifrec.classesdict.get(clsname, None)
         if not clsrec:
             clsrec = ifrec.classesdict[clsname] = ShaperConfigClass(ifrec, clsname)
             ifrec.classes.append(clsrec)
-    
+
         # process magic names
         if rest in ['pri', 'priority']:
             clsrec.pri = int(val)
@@ -3321,9 +3323,9 @@ class ShaperConfig:
                 val = int(val)
             setattr(clsrec, rest, val)
             return
-    
+
         raise Exception("Invalid cmd field '%s' in %s.%s" % (rest, ifname, clsname))
-    
+
     #@-node:execute
     #@+node:save
     def save(self, hasChanged=False):
@@ -3339,9 +3341,9 @@ class ShaperConfig:
         print "config.save: 3"
         if not self.hasChanged:
             return
-    
+
         print "saving config"
-    
+
         path = self.path
         pathNew = path + ".sav"
         pathBak = path + ".bak"
@@ -3354,22 +3356,22 @@ class ShaperConfig:
             "# Updated: %s" % time.asctime(),
             "# ",
             "",
-    
+
             "# width and height of GUI window - ignore this",
             "guiwidth %s" % self.guiWidth,
             "guiheight %s" % self.guiHeight,
             "",
-            
+
             "# time period in seconds between each run",
             "period %s" % self.shaperPeriod,
             "",
             "",
             ]))
-    
+
         for iface in self.interfaces:
             iface.save(f)
             f.write("\n")
-    
+
         try:
             os.unlink(pathBak)
         except:
@@ -3377,8 +3379,8 @@ class ShaperConfig:
         os.rename(path, pathBak)
         os.rename(pathNew, path)
         self.hasChanged = False
-    
-    
+
+
     #@-node:save
     #@+node:__getattr__
     def __getattr__(self, name):
@@ -3392,12 +3394,12 @@ class ShaperConfig:
     #@-node:__getattr__
     #@+node:__str__
     def __str__(self):
-        
+
         return "\n".join([str(i) for i in self.interfaces])
     #@-node:__str__
     #@+node:__repr__
     def __repr__(self):
-        
+
         return str(self)
     #@-node:__repr__
     #@-others
@@ -3414,25 +3416,25 @@ class ShaperConfigIface:
     #@-node:attribs
     #@+node:__init__
     def __init__(self, name):
-        
+
         self.name = name
-    
+
         self.classesdict = {}
         self.classes = []
-    
+
         self.staticclassesdict = {}
         self.staticclasses = []
-        
+
         dflt = self.default = self.classesdict['default'] = ShaperConfigClass(self, 'default')
         dflt.bwIn = self.bwIn
         dflt.bwOut = self.bwOut
-    
+
         self.ipaddr = '0.0.0.0'
     #@-node:__init__
     #@+node:__getattr__
     def __getattr__(self, name):
         """convenience for interactive debugging"""
-    
+
         if name == 'parent':
             class P: pass
             p = P()
@@ -3444,30 +3446,30 @@ class ShaperConfigIface:
             return self.classesdict[name]
         except:
             raise Exception("%s: No such class '%s'" % (self.name, name))
-    
+
     #@-node:__getattr__
     #@+node:__setattr__
     def __setattr__(self, attr, value):
-        
+
         self.__dict__[attr] = value
-    
+
         if attr in ['bwIn', 'bwOut']:
             setattr(self.default, attr, value)
     #@-node:__setattr__
     #@+node:__str__
     def __str__(self):
-    
+
         s = "%s: ip=%s in=%s out=%s" % (self.name, self.ipaddr, self.bwIn, self.bwOut)
         if self.classes:
             s += "\n" + "\n".join([str(cls) for cls in self.classes])
         s += "\n" + str(self.default)
         return s
-    
+
     #@-node:__str__
     #@+node:__repr__
     def __repr__(self):
         return str(self)
-    
+
     #@-node:__repr__
     #@+node:save
     def save(self, f):
@@ -3496,37 +3498,37 @@ class ShaperConfigClass:
     #@+node:attribs
     pri = 1
     mode = 'dynamic'
-    
+
     # attributes for 'static mode' shaping
     raddr = None
     rport = None
     laddr = None
     lport = None
-    
+
     # window size in seconds for calculating rates
     rateWindow1 = 5.0
     #@-node:attribs
     #@+node:__init__
     def __init__(self, parent, name):
-        
+
         self.parent = parent
         self.name = name
         #self.subclassesdict = {}
         #self.subclasses = []
-    
+
         self.conns = []
         self.oldconns = []
-    
+
         self.tests = []
         self.exprs = []
-    
+
         # these lists are for dynamic monitoring via the gui
         self.pktInHist = []   # list of (time, size) tuples for inbound pkts
         self.pktOutHist = []  # ditto for outbound packets
-    
+
         self.rateIn = 0.0
         self.rateOut = 0.0
-    
+
         self.silly = "xxx"
     #@-node:__init__
     #@+node:__getattr__
@@ -3546,15 +3548,15 @@ class ShaperConfigClass:
         if name == 'ipaddr':
             self.ipaddr = parent.ipaddr
             return parent.ipaddr
-    
+
         if name in ['__nonzero__', '__len__']:
             raise AttributeError(name)
-    
+
         #try:
         #    return self.subclassesdict[name]
         #except:
         #    raise Exception("%s.%s: No such subclass '%s'" % (self.parent.name, self.name, name))
-    
+
     #@-node:__getattr__
     #@+node:__setattr__
     def __setattr__(self, attr, val):
@@ -3565,23 +3567,23 @@ class ShaperConfigClass:
         """
         # set the attrib
         self.__dict__[attr] = val
-    
+
         # switch to static mode if a static attrib has been set
         if attr in ['raddr', 'rport', 'laddr', 'lport']:
             self.__dict__['mode'] = 'static'
     #@-node:__setattr__
     #@+node:__str__
     def __str__(self):
-    
+
         hdr = "%s.%s: pri=%s in=%s out=%s/%s" % (
                     self.parent.name, self.name,
                     self.pri,
                     self.bwIn, self.bwOutRate, self.bwOutCeil
                     )
-    
+
         if self.name == 'default':
             return hdr
-    
+
         hdr1 = "\n    STATIC:"
         hdr2 = ''
         if self.raddr:
@@ -3594,17 +3596,17 @@ class ShaperConfigClass:
             hdr1 += hdr2
         else:
             hdr1 = "\n    ** NO STATIC RULE **"
-    
+
         if self.exprs:
             hdr1 += "\n  " + "\n".join(["  "+expr for expr in self.exprs])
         else:
             hdr1 += "\n    ** NO DYNAMIC RULES **"
-    
+
         return hdr + hdr1
     #@-node:__str__
     #@+node:__repr__
     def __repr__(self):
-    
+
         return repr(str(self))
     #@-node:__repr__
     #@+node:addTest
@@ -3640,7 +3642,7 @@ class ShaperConfigClass:
             "  %s.out.ceil %s" % (name, self.bwOutCeil),
             "  %s.pri %s" % (name, self.pri),
             ]) + "\n")
-    
+
         if self.exprs:
             f.write("  # dynamic matching rules\n")
             for e in self.exprs:
@@ -3656,19 +3658,19 @@ class ShaperConfigClass:
     def matches(self, connrec):
         """
         Tests if a connection matches the rule of one or more of our subclasses
-        
+
         connrec is an item of class TCPConns
-        
+
         Returns True if matches, False if not
         """
         m = staticItemMatch
-    
+
         if 0 and self.name == 'local-apache' and connrec.rport != 22 and connrec.lport != 25:
             print "configclass.matches: ", [getattr(self, x) for x in ['raddr', 'rport', 'lport']]
             print "configclass.matches: connrec=%s" % repr(connrec)
             print repr(self.raddr), repr(self.rport), repr(self.lport)
-    
-    
+
+
         if self.mode == 'static':
             # only match the static flow attributes that have been set for this class
             if (m(self.raddr, connrec.raddr)
@@ -3678,7 +3680,7 @@ class ShaperConfigClass:
                 if 0 and self.name== 'local-apache':
                     print "ShaperConfigClass.matches: %s: got static match" % self.name
                 return True
-    
+
         if self.mode == 'dynamic':
             for matches in self.tests:
                 if matches(connrec):
@@ -3686,9 +3688,9 @@ class ShaperConfigClass:
                         print "ShaperConfigClass.matches: %s: got dynamic match" % self.name
                     return True
             return False
-    
-    
-    
+
+
+
     #@-node:matches
     #@+node:matchesPacket
     def matchesPacket(self, src, sport, dst, dport, dynamic=False):
@@ -3697,23 +3699,23 @@ class ShaperConfigClass:
         our static rule, or matches one or more connections currently known to this class
         """
         f = staticItemMatch
-    
+
         if 0:
             if self.name == 'local-apache' and sport not in [22,25] and dport not in [22,25]:
                 raddr = self.raddr
                 rport = self.rport
                 laddr = self.laddr
                 lport = self.lport
-    
-                print "----vvv----------------------"    
+
+                print "----vvv----------------------"
                 print "cls.matchesPacket: trying to match packet %s:%s->%s:%s against class %s" % (
                     repr(src), repr(sport), repr(dst), repr(dport), self.name)
                 print "mode=%s" % self.mode
                 print "raddr=%s rport=%s laddr=%s lport=%s" % (
                     repr(raddr), repr(rport), repr(laddr), repr(lport))
                 print "----^^^----------------------"
-    
-    
+
+
         # test for dynamic match
         #print "-------------------"
         if dynamic:
@@ -3730,7 +3732,7 @@ class ShaperConfigClass:
                 rport = self.rport
                 laddr = self.laddr
                 lport = self.lport
-        
+
                 if ((f(raddr, src) and f(rport, sport) and self.ipaddr == dst and f(lport, dport))
                     or
                     (f(raddr, dst) and f(rport, dport) and self.ipaddr == src and f(lport, sport))
@@ -3738,33 +3740,33 @@ class ShaperConfigClass:
                     #print "static match %s: %s:%s -> %s:%s" % (
                     #    self.name, src, sport, dst, dport)
                     return True
-        
+
         # nothing matches
         return False
-    
+
     #@-node:matchesPacket
     #@+node:on_packet
     def on_packet(self, src, sport, dst, dport, plen):
-        
+
         #print "class %s.%s got packet %s:%s -> %s:%s %s" % (
         #    self.parent.name, self.name, src, sport, dst, dport, plen)
-    
+
         dt = self.rateWindow1
         now = time.time()
         then = now - dt
         self.lastPktTime = now
-    
+
         ipaddr = self.ipaddr
         pktInHist = self.pktInHist
         pktOutHist = self.pktOutHist
-    
+
         # save packet in inbound and/or outbound histories
         item = (now, plen)
         if dst == ipaddr:
             pktInHist.insert(0, item)
         if src == ipaddr:
             pktOutHist.insert(0, item)
-    
+
         # calculate current in and out rates
         i = 0
         totIn = 0
@@ -3775,7 +3777,7 @@ class ShaperConfigClass:
             i += 1
         self.rateIn = totIn / dt # determine moving avg in
         del pktInHist[i:]
-        
+
         i = 0
         totOut = 0
         for when, size in pktOutHist:
@@ -3785,16 +3787,16 @@ class ShaperConfigClass:
             i += 1
         self.rateOut = totOut / dt # determine moving avg in
         del pktOutHist[i:]
-    
+
         #print "%s.%s: rate = %s b/s in, %s b/s out" % (
         #    self.parent.name, self.name, self.rateIn, self.rateOut)
-        
+
         #self.pktInHist = []   # list of (time, size) tuples for inbound pkts, in reverse order
         #self.pktOutHist = []  # ditto for outbound packets
-    
+
         self.silly = "yyy"
-    
-    
+
+
     #@-node:on_packet
     #@+node:sortConnections
     def sortConnections(self):
@@ -3804,7 +3806,7 @@ class ShaperConfigClass:
         of tc commands will be the same
         """
         def sortconn(conn1, conn2):
-            
+
             if conn1.raddr < conn2.raddr:
                 return -1
             elif conn1.raddr > conn2.raddr:
@@ -3822,10 +3824,10 @@ class ShaperConfigClass:
             elif conn1.lport > conn2.lport:
                 return 1
             return 0
-    
+
         self.conns.sort(sortconn)
-    
-    
+
+
     #@-node:sortConnections
     #@-others
 #@-node:class ShaperConfigClass
@@ -3853,7 +3855,7 @@ class Conn:
     def strdetail(self):
         return str(self) + " (%s %s)" % (
             self.cmd, " ".join(["'"+arg+"'" for arg in self.args]))
-    
+
     def matchesPacket(self, src, sport, dst, dport):
         """
         Returns True if a packet matches this connection
@@ -3867,7 +3869,7 @@ class Conn:
         #    repr(src), repr(sport), repr(dst), repr(dport),
         #    repr(raddr), repr(rport), repr(laddr), repr(lport))
         m = staticItemMatch
-        
+
         if ((m(raddr, src) and m(rport, sport) and m(lport, dport))
             or
             (m(raddr, dst) and m(rport, dport) and m(lport, sport))
@@ -3888,11 +3890,11 @@ class TCPConns:
     #@    @+others
     #@+node:attribs
     netstatCmd = netstatCmd
-    
+
     #@-node:attribs
     #@+node:__init__
     def __init__(self):
-    
+
         if GeoIP:
             # create a GeoIP object, enable country lookups
             try:
@@ -3906,21 +3908,21 @@ class TCPConns:
         else:
             self.ip2cc = None
             self.ip2country = None
-    
+
         self.getconns()
     #@-node:__init__
     #@+node:getconns
     def getconns(self):
-    
+
         # run 'netstat', break output into lines
         lines = commands.getoutput(self.netstatCmd).strip().split("\n")
-    
+
         # and break each line into fields
         lines = [reSpaces.split(l) for l in lines]
-    
+
         ip2cc = self.ip2cc
         ip2country = self.ip2country
-    
+
         conns = []
         for line in lines:
             try:
@@ -3958,11 +3960,11 @@ class TCPConns:
                 #traceback.print_exc()
                 pass
         self.conns = conns
-    
+
     #@-node:getconns
     #@+node:dump
     def dump(self):
-        
+
         for conn in self:
             print str(conn)
     #@-node:dump
@@ -4043,7 +4045,7 @@ def main():
     debug = False
 
     for opt, val in opts:
-        
+
         if opt in ['-h', '-?', '--help']:
             usage(True)
 
@@ -4148,7 +4150,7 @@ def main():
 #@-node:main
 #@+node:usage
 def usage(detailed=False):
-    
+
     print "Usage: %s <options> <command>" % sys.argv[0]
     if not detailed:
         sys.exit(0)
@@ -4175,22 +4177,5 @@ def usage(detailed=False):
     print "              then rebuild the shaping rules"
     print "     help   - display this help"
     print
-    
+
     sys.exit(0)
-
-    
-
-
-
-#@-node:usage
-#@+node:mainline
-if __name__ == '__main__':
-    main()
-
-#if __name__ == '__main__':
-#    for c in TCPConns():
-#        print c
-#@-node:mainline
-#@-others
-#@-node:@file pyshaper.py
-#@-leo
