@@ -10,7 +10,7 @@ Requirements:
 
     - iproute2 package
 
-    - Linux kernel 2.4.x or 2.6.x (tested on 2.6.4), configured
+    - Linux kernel 2.4.x and up (tested on 2.6.4), configured
       with the following settings:
           
           - Device Drivers

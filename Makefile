@@ -2,6 +2,7 @@ default:
 	@echo "Type 'make install' to install pyshaper"
 
 install:
+	pip install -r requirements.txt
 	python setup.py install
 	@echo ""
 	@echo "-----------------------------------------------------"

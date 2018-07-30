@@ -1,3 +1,17 @@
+# encoding: utf8
+#
+# pyshaper - a dynamic traffic-shaper for Linux 2.4-2.6 based systems.
+#
+# Written in March 2004 by David McNab <david@freenet.org.nz>
+# Copyright (c) 2004 by David McNab
+#
+# Released under the terms of the GNU General Public License.
+#
+# You should have received a file named 'COPYING' with this
+# program. If not, you can review a copy of the GPL at the
+# GNU website, at http://gnu.org
+#
+
 
 import os, re
 

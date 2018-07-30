@@ -6,7 +6,7 @@
 # 
 
 # width and height of GUI window - ignore this
-guiwidth 394
+guiwidth 396
 guiheight 234
 
 # time period in seconds between each run
