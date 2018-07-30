@@ -22,3 +22,9 @@ of all TCP connections to/from external hosts, and matching them against
 the rules in your configuration.
 
 To install and deploy pyshaper, refer to the INSTALL file in this directory.
+
+Rename pyshaper.conf.example to pyshaper.conf and run it with
+
+    PYSHAPERCONFIG=$PWD/pyshaper.conf pyshaper
+
+to avoid installing stuff in /etc.
