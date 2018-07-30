@@ -1,0 +1,24 @@
+This is pyshaper, a dynamic traffic-shaper application for Linux 2.4.x and 2.6.x
+
+pyshaper allows you to set minimum and maximum bandwidth
+for active TCP/IP connections.
+
+In contrast with many other shaping applications, pyshaper:
+    
+    - is relatively easy and uncomplicated to use
+    - lets you shape traffic on all kinds of criteria, like:
+        - local/remote IP address/port (nothing special)
+        - pid of local program
+        - username in which local program is running
+        - program invocation command, and arguments
+        - country in which remote peer resides
+
+For example, you can set up a configuration that sets a traffic cap
+on all peer2peer connections to overseas hosts, or sets a traffic
+cap on all connections made by a specific user.
+
+pyshaper runs typically as a daemon, periodically taking an inventory
+of all TCP connections to/from external hosts, and matching them against
+the rules in your configuration.
+
+To install and deploy pyshaper, refer to the INSTALL file in this directory.

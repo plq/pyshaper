@@ -1,0 +1,292 @@
+.TH "pyshaper" "8" "0.1.1" "David McNab" "Traffic-shaping (bandwidth management)"
+.SH "NAME"
+.LP 
+.B 
+pyshaper
+\- Simple yet versatile dynamic bandwidth manager
+.SH "SYNOPSIS"
+.LP 
+.B 
+pyshaper [<\fIoptions\fR>]
+
+.LP 
+.B 
+pyshaper [<\fIoptions\fR>]
+.B 
+start
+
+.LP 
+.B 
+pyshaper stop
+
+.LP 
+.B 
+pyshaper help
+
+.LP 
+.B 
+pyshaper reload
+
+.LP 
+.B 
+pyshaper status
+
+.LP 
+.B 
+pyshaper netstat
+.SH "DESCRIPTION"
+.LP 
+.B 
+pyshaper
+is a daemon which dynamically manages your incoming and outgoing bandwidth allocations.
+.LP 
+Its main purpose is for people in countries like New Zealand and Australia, where the telcos routinely indulge in monopoly price\-gouging, and broadband connectivity is hobbled by meagre traffic caps (as little as 400MB/month) with harsh fees for excess traffic.
+.LP 
+With
+.B 
+pyshaper
+you can safely run internet programs, and leave them running, without fear of maxing out your monthly traffic allowances. You can easily set up high\-level
+.B 
+classes
+(traffic categories), and enforce strict priorities and bandwidth limits for connections which fall into each of these classes.
+.LP 
+In contrast to 'bare\-bones' traffic shaping programs like tc(8), and the various 'tc\-wrapper' programs, pyshaper is simple to configure and use, and allows you to create bandwidth allocations which will be dynamically applied in real time to the current TCP connections, based on sophisticated combinations of attributes such as:
+.IP 
+\fBraddr\fR
+IP address of remote host
+.br 
+.IP 
+\fBrport\fR
+Remote port
+.br 
+.IP 
+\fBladdr\fR
+IP address of local host
+.br 
+.IP 
+\fBlport\fR
+Local port
+.br 
+.IP 
+\fBcc\fR
+2\-letter uppercase country code for the remote host
+.br 
+.IP 
+\fBcountry\fR
+Full country name of remote host
+.br 
+.IP 
+\fBuser\fR
+Username under which the program owning the local connected port is running.
+.br 
+.IP 
+\fBpid\fR
+Process ID of the locally connected program (probably not much use).
+.br 
+.IP 
+\fBcmd\fR
+The command under which the locally connected program was launched, ie the program's
+.B 
+argv[0]
+.br 
+.IP 
+\fBargs\fR
+The invocation arguments of the locally connected program
+.LP 
+.B 
+pyshaper
+periodically scans the current TCP connections from the local computer (by default, once every 30 seconds), and matches them against your chosen rules \- a simple set of boolean expressions in your configuration file.
+.LP 
+For each connection that matches one of your rules,
+.B 
+pyshaper
+runs the appropriate
+.B 
+tc(8)
+commands to dynamically set the priority, and shape the outgoing (and incoming) bandwidth allocation, for that connection.
+.LP 
+What makes
+.B 
+pyshaper
+unique is its
+.B 
+dynamic shaping
+feature.
+.LP 
+Most 'tc\-wrapping' traffic shaping programs just pass a set of
+.B 
+static
+shaping rules to
+.B 
+tc.
+Such static rules can only match on local and remote hostname and port (unless of course you're a nuts\-n\-bolts networking wizard, and can write iptables(1) rules in your sleep).
+.LP 
+But since
+.B 
+pyshaper
+periodically scans all active connections, and reads
+.B 
+/proc
+info for each locally connected program, it allows you to match connections in real time, based on the additional attributes listed above.
+.LP 
+All this amounts to a high degree of flexibility, which allows you to create some interesting traffic\-shaping scenarios such as:
+.IP 
+Providing generous downloading bandwidth for people visiting your website from New Zealand or Australia, nominal bandwidth for visitors from other countries, but severely restricted bandwidth for visitors from Slovakia
+.IP 
+.br 
+Providing high bandwidth between a local Freenet node, and remote Freenet nodes in your own country, but creating a severely restricted bandwidth pool for communications between the local Freenet node and nodes in other countries. (This is an interesting scenario, because Freenet nodes connect via random ports, and no protocol\-based traffic detectors are yet available which can match Freenet FNP traffic)
+.IP 
+.br 
+Setting a fixed 32kbit/s bandwidth for all Peer2peer connections (including eDonkey, I2P, Freenet, Limewire etc) resulting from local processes owned by user
+.B 
+fred
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB\-h, \-\-help\fR
+Output help information and exit.
+.TP 
+\fB\-v, \-\-version\fR
+Display program version number and exit.
+.TP 
+\fB\-f, \-\-foreground\fR
+Do not detach \- run the program in foreground.
+.br 
+By default, pyshaper detaches from the console and runs as a daemon.
+.TP 
+\fB\-d, \-\-debug\fR
+Enable debugging mode (wrecks performance).
+.TP 
+\fB\-V, \-\-verbosity=n\fR
+Sets output verbosity level.
+.br 
+Values are 1 (silent), 2 (normal), 3 (detailed), 4 (noisy).
+.br 
+Default is 2.
+.SH "COMMANDS"
+.LP 
+The available pyshaper commands are:
+
+.TP 
+\fBstart\fR
+Start pyshaper running (forks and detaches from console and runs in background, unless
+.B 
+\-f
+or
+.B 
+\-\-foreground
+option is set.
+
+.TP 
+\fBstop\fR
+Sends a
+.B 
+SIGTERM
+signal to the running
+.B 
+pyshaper
+process, telling it to terminate.
+
+.TP 
+\fBhelp\fR
+Output help information and exit.
+
+.TP 
+\fBstatus\fR
+Runs tc commands to display the status of the shaped network interfaces.
+
+.TP 
+\fBnetstat\fR
+Runs the
+.B 
+netstat
+command with a number of options set, to display current TCP connections.
+
+.TP 
+\fBreload\fR
+Sends a
+.B 
+SIGHUP
+signal to the running
+.B 
+pyshaper
+process, telling it to reload its configuration file.
+.br 
+Handy, because it allows you to edit the configuration file and make pyshaper use this configuration without terminating.
+
+.TP 
+\fBrestart\fR
+Synonym for
+.B 
+reload
+
+.TP 
+\fBkill\fR
+Synonym for
+.B 
+stop
+
+.SH "FILES"
+.LP 
+\fI/etc/pyshaper/pyshaper.conf\fP
+.IP 
+pyshaper configuration
+.LP 
+\fI/etc/pyshaper/pyshaper.conf.readme\fP
+.IP 
+pyshaper config file syntax
+.LP 
+\fI/var/run/pyshaper.pid\fP
+.IP 
+Holds process id of running pyshaper process, used by the
+.B 
+reload
+and
+.B 
+stop
+commands.
+.SH "RESTRICTIONS"
+You must be root to run pyshaper.
+.SH "ENVIRONMENT VARIABLES"
+.LP 
+.TP 
+\fBPYSHAPERCONFIG\fP
+Specifies an alternative configuration file
+.br 
+(default is /etc/pyshaper/pyshaper.conf)
+.SH "EXAMPLES"
+.LP 
+Refer to
+.B 
+pyshaper.conf(8),
+or the
+.B 
+examples
+directory within the pyshaper distribution tarball.
+.SH "BUGS"
+.LP 
+New TCP connections will gain the 'default' bandwidth (as set in your configuration), until the next pyshaper connection scanning cycle, at which time they will be matched against your rules and shaped accordingly. This can cause momentary bursts of excess bandwidth consumption on the part of connections you want throttled. To work around this, be a little more conservative in your bandwidth allocations, and/or set a more frequent connection scanning interval.
+.LP 
+.B 
+pyshaper
+only manages TCP connections. At this time, it is not capable of managing UDP traffic.
+.SH "AUTHORS"
+.LP 
+.B 
+pyshaper
+was written by David McNab <david@freenet.org.nz>
+.br 
+Refer author's python repository at http://www.freenet.org.nz/python
+
+.SH "LICENSE"
+.LP 
+.B 
+pyshaper
+is released under the terms of the GNU General Public License (GPL). For more information on the GPL, refer to the GNU Website at http://gnu.org
+.SH "SEE ALSO"
+.LP 
+.B 
+pyshaper.conf(8)
+.LP 
+.B 
+tc(8)

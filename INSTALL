@@ -1,0 +1,61 @@
+Installation instructions for pyshaper
+
+Requirements:
+    
+    - python 2.2 or later
+
+    - GeoIP Python module (http://www.maxmind.com/app/python)
+      (optional, but needed if you want to filter by country of
+      remote peer)
+
+    - iproute2 package
+
+    - Linux kernel 2.4.x or 2.6.x (tested on 2.6.4), configured
+      with the following settings:
+          
+          - Device Drivers
+             - Networking Support
+                - Networking Options
+                   - QoS and/or Fair Queueing
+                      * CBQ packet scheduler
+                      * HTB packet scheduler
+                      * SFQ Queue
+                      * Ingress Qdisc
+                      * QoS Support
+                         * Rate estimator
+                      * Packet classifier API
+                         * TC index classifier
+                         * Routing table based classifier
+                         * U32 classifier
+                         * Traffic policing (needed for in/egress)
+
+    - if you want to run the optional GUI front end, you'll also need:
+        
+        - python tkinter
+        - Tk 8.4 or later (http://www.tcl.tk)
+        - python megawidgets (http://pmw.sourceforge.net)
+        - tcpdump
+
+
+Installation:
+    
+    - make sure you are running a kernel with at least all of the above options
+    
+    - type 'make install'
+
+    - the installer creates a directory '/etc/pyshaper', and puts files
+      pyshaper.conf and pyshaper.conf.readme in there. pyshaper is hardwired
+      to look for this file on startup (and upon forced reload signals)
+
+Running:
+    
+    - edit the /etc/pyshaper/pyshaper.conf file to your satisfaction
+
+    - become root, and type 'pyshaper --help' to see the available options
+
+    - once you have created a valid pyshaper.conf, and pyshaper is running
+      ok with your configuration, you can run a separate pyshaper process
+      in gui mode, which allows you to see and change bandwidth usage
+      in real time.
+
+    - to run the GUI, just run pyshaper with no arguments

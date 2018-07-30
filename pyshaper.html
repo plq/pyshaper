@@ -1,0 +1,402 @@
+Content-type: text/html
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML><HEAD><TITLE>Man page of pyshaper</TITLE>
+</HEAD><BODY>
+<H1>pyshaper</H1>
+Section: Traffic-shaping (bandwidth management) (8)<BR>Updated: 0.1.1<BR><A HREF="#index">Index</A>
+<A HREF="../index.html">Return to Main Contents</A><HR>
+
+<A NAME="lbAB">&nbsp;</A>
+<H2>NAME</H2>
+
+<P>
+
+<B>pyshaper</B>
+
+- Simple yet versatile dynamic bandwidth manager
+<A NAME="lbAC">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+<P>
+
+<B>pyshaper [&lt;</B><I>options</I>&gt;]
+
+<P>
+<P>
+
+<B>pyshaper [&lt;</B><I>options</I>&gt;]
+
+<B>start</B>
+
+<P>
+<P>
+
+<B>pyshaper stop</B>
+
+<P>
+<P>
+
+<B>pyshaper help</B>
+
+<P>
+<P>
+
+<B>pyshaper reload</B>
+
+<P>
+<P>
+
+<B>pyshaper status</B>
+
+<P>
+<P>
+
+<B>pyshaper netstat</B>
+
+<A NAME="lbAD">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<P>
+
+<B>pyshaper</B>
+
+is a daemon which dynamically manages your incoming and outgoing bandwidth allocations.
+<P>
+
+Its main purpose is for people in countries like New Zealand and Australia, where the telcos routinely indulge in monopoly price-gouging, and broadband connectivity is hobbled by meagre traffic caps (as little as 400MB/month) with harsh fees for excess traffic.
+<P>
+
+With
+<B>pyshaper</B>
+
+you can safely run internet programs, and leave them running, without fear of maxing out your monthly traffic allowances. You can easily set up high-level
+<B>classes</B>
+
+(traffic categories), and enforce strict priorities and bandwidth limits for connections which fall into each of these classes.
+<P>
+
+In contrast to 'bare-bones' traffic shaping programs like <A HREF="../man8/tc.8.html">tc</A>(8), and the various 'tc-wrapper' programs, pyshaper is simple to configure and use, and allows you to create bandwidth allocations which will be dynamically applied in real time to the current TCP connections, based on sophisticated combinations of attributes such as:
+<DL COMPACT>
+<DT><DD>
+<B>raddr</B>
+IP address of remote host
+<BR>
+
+<DT><DD>
+<B>rport</B>
+Remote port
+<BR>
+
+<DT><DD>
+<B>laddr</B>
+IP address of local host
+<BR>
+
+<DT><DD>
+<B>lport</B>
+Local port
+<BR>
+
+<DT><DD>
+<B>cc</B>
+2-letter uppercase country code for the remote host
+<BR>
+
+<DT><DD>
+<B>country</B>
+Full country name of remote host
+<BR>
+
+<DT><DD>
+<B>user</B>
+Username under which the program owning the local connected port is running.
+<BR>
+
+<DT><DD>
+<B>pid</B>
+Process ID of the locally connected program (probably not much use).
+<BR>
+
+<DT><DD>
+<B>cmd</B>
+The command under which the locally connected program was launched, ie the program's
+<B>argv[0]</B>
+
+<BR>
+
+<DT><DD>
+<B>args</B>
+The invocation arguments of the locally connected program
+</DL>
+<P>
+
+<B>pyshaper</B>
+
+periodically scans the current TCP connections from the local computer (by default, once every 30 seconds), and matches them against your chosen rules - a simple set of boolean expressions in your configuration file.
+<P>
+
+For each connection that matches one of your rules,
+<B>pyshaper</B>
+
+runs the appropriate
+<B><A HREF="../man8/tc.8.html">tc</A>(8)</B>
+
+commands to dynamically set the priority, and shape the outgoing (and incoming) bandwidth allocation, for that connection.
+<P>
+
+What makes
+<B>pyshaper</B>
+
+unique is its
+<B>dynamic shaping</B>
+
+feature.
+<P>
+
+Most 'tc-wrapping' traffic shaping programs just pass a set of
+<B>static</B>
+
+shaping rules to
+<B>tc.</B>
+
+Such static rules can only match on local and remote hostname and port (unless of course you're a nuts-n-bolts networking wizard, and can write <A HREF="../man1/iptables.1.html">iptables</A>(1) rules in your sleep).
+<P>
+
+But since
+<B>pyshaper</B>
+
+periodically scans all active connections, and reads
+<B>/proc</B>
+
+info for each locally connected program, it allows you to match connections in real time, based on the additional attributes listed above.
+<P>
+
+All this amounts to a high degree of flexibility, which allows you to create some interesting traffic-shaping scenarios such as:
+<DL COMPACT>
+<DT><DD>
+Providing generous downloading bandwidth for people visiting your website from New Zealand or Australia, nominal bandwidth for visitors from other countries, but severely restricted bandwidth for visitors from Slovakia
+<DT><DD>
+<BR>
+
+Providing high bandwidth between a local Freenet node, and remote Freenet nodes in your own country, but creating a severely restricted bandwidth pool for communications between the local Freenet node and nodes in other countries. (This is an interesting scenario, because Freenet nodes connect via random ports, and no protocol-based traffic detectors are yet available which can match Freenet FNP traffic)
+<DT><DD>
+<BR>
+
+Setting a fixed 32kbit/s bandwidth for all Peer2peer connections (including eDonkey, I2P, Freenet, Limewire etc) resulting from local processes owned by user
+<B>fred</B>
+
+</DL>
+<A NAME="lbAE">&nbsp;</A>
+<H2>OPTIONS</H2>
+
+<P>
+
+<DL COMPACT>
+<DT><B>-h, --help</B><DD>
+Output help information and exit.
+<DT><B>-v, --version</B><DD>
+Display program version number and exit.
+<DT><B>-f, --foreground</B><DD>
+Do not detach - run the program in foreground.
+<BR>
+
+By default, pyshaper detaches from the console and runs as a daemon.
+<DT><B>-d, --debug</B><DD>
+Enable debugging mode (wrecks performance).
+<DT><B>-V, --verbosity=n</B><DD>
+Sets output verbosity level.
+<BR>
+
+Values are 1 (silent), 2 (normal), 3 (detailed), 4 (noisy).
+<BR>
+
+Default is 2.
+</DL>
+<A NAME="lbAF">&nbsp;</A>
+<H2>COMMANDS</H2>
+
+<P>
+
+The available pyshaper commands are:
+<P>
+<DL COMPACT>
+<DT><B>start</B><DD>
+Start pyshaper running (forks and detaches from console and runs in background, unless
+<B>-f</B>
+
+or
+<B>--foreground</B>
+
+option is set.
+<P>
+<DT><B>stop</B><DD>
+Sends a
+<B>SIGTERM</B>
+
+signal to the running
+<B>pyshaper</B>
+
+process, telling it to terminate.
+<P>
+<DT><B>help</B><DD>
+Output help information and exit.
+<P>
+<DT><B>status</B><DD>
+Runs tc commands to display the status of the shaped network interfaces.
+<P>
+<DT><B>netstat</B><DD>
+Runs the
+<B>netstat</B>
+
+command with a number of options set, to display current TCP connections.
+<P>
+<DT><B>reload</B><DD>
+Sends a
+<B>SIGHUP</B>
+
+signal to the running
+<B>pyshaper</B>
+
+process, telling it to reload its configuration file.
+<BR>
+
+Handy, because it allows you to edit the configuration file and make pyshaper use this configuration without terminating.
+<P>
+<DT><B>restart</B><DD>
+Synonym for
+<B>reload</B>
+
+<P>
+<DT><B>kill</B><DD>
+Synonym for
+<B>stop</B>
+
+<P>
+</DL>
+<A NAME="lbAG">&nbsp;</A>
+<H2>FILES</H2>
+
+<P>
+
+<I>/etc/pyshaper/pyshaper.conf</I>
+<DL COMPACT>
+<DT><DD>
+pyshaper configuration
+</DL>
+<P>
+
+<I>/etc/pyshaper/pyshaper.conf.readme</I>
+<DL COMPACT>
+<DT><DD>
+pyshaper config file syntax
+</DL>
+<P>
+
+<I>/var/run/pyshaper.pid</I>
+<DL COMPACT>
+<DT><DD>
+Holds process id of running pyshaper process, used by the
+<B>reload</B>
+
+and
+<B>stop</B>
+
+commands.
+</DL>
+<A NAME="lbAH">&nbsp;</A>
+<H2>RESTRICTIONS</H2>
+
+You must be root to run pyshaper.
+<A NAME="lbAI">&nbsp;</A>
+<H2>ENVIRONMENT VARIABLES</H2>
+
+<P>
+
+<DL COMPACT>
+<DT><B>PYSHAPERCONFIG</B><DD>
+Specifies an alternative configuration file
+<BR>
+
+(default is /etc/pyshaper/pyshaper.conf)
+</DL>
+<A NAME="lbAJ">&nbsp;</A>
+<H2>EXAMPLES</H2>
+
+<P>
+
+Refer to
+<B><A HREF="../man8/pyshaper.conf.8.html">pyshaper.conf</A>(8),</B>
+
+or the
+<B>examples</B>
+
+directory within the pyshaper distribution tarball.
+<A NAME="lbAK">&nbsp;</A>
+<H2>BUGS</H2>
+
+<P>
+
+New TCP connections will gain the 'default' bandwidth (as set in your configuration), until the next pyshaper connection scanning cycle, at which time they will be matched against your rules and shaped accordingly. This can cause momentary bursts of excess bandwidth consumption on the part of connections you want throttled. To work around this, be a little more conservative in your bandwidth allocations, and/or set a more frequent connection scanning interval.
+<P>
+
+<B>pyshaper</B>
+
+only manages TCP connections. At this time, it is not capable of managing UDP traffic.
+<A NAME="lbAL">&nbsp;</A>
+<H2>AUTHORS</H2>
+
+<P>
+
+<B>pyshaper</B>
+
+was written by David McNab &lt;<A HREF="mailto:david@freenet.org.nz">david@freenet.org.nz</A>&gt;
+<BR>
+
+Refer author's python repository at <A HREF="http://www.freenet.org.nz/python">http://www.freenet.org.nz/python</A>
+<P>
+<A NAME="lbAM">&nbsp;</A>
+<H2>LICENSE</H2>
+
+<P>
+
+<B>pyshaper</B>
+
+is released under the terms of the GNU General Public License (GPL). For more information on the GPL, refer to the GNU Website at <A HREF="http://gnu.org">http://gnu.org</A>
+<A NAME="lbAN">&nbsp;</A>
+<H2>SEE ALSO</H2>
+
+<P>
+
+<B><A HREF="../man8/pyshaper.conf.8.html">pyshaper.conf</A>(8)</B>
+
+<P>
+
+<B><A HREF="../man8/tc.8.html">tc</A>(8)</B>
+
+<P>
+
+<HR>
+<A NAME="index">&nbsp;</A><H2>Index</H2>
+<DL>
+<DT><A HREF="#lbAB">NAME</A><DD>
+<DT><A HREF="#lbAC">SYNOPSIS</A><DD>
+<DT><A HREF="#lbAD">DESCRIPTION</A><DD>
+<DT><A HREF="#lbAE">OPTIONS</A><DD>
+<DT><A HREF="#lbAF">COMMANDS</A><DD>
+<DT><A HREF="#lbAG">FILES</A><DD>
+<DT><A HREF="#lbAH">RESTRICTIONS</A><DD>
+<DT><A HREF="#lbAI">ENVIRONMENT VARIABLES</A><DD>
+<DT><A HREF="#lbAJ">EXAMPLES</A><DD>
+<DT><A HREF="#lbAK">BUGS</A><DD>
+<DT><A HREF="#lbAL">AUTHORS</A><DD>
+<DT><A HREF="#lbAM">LICENSE</A><DD>
+<DT><A HREF="#lbAN">SEE ALSO</A><DD>
+</DL>
+<HR>
+This document was created by
+<A HREF="http://www.freenet.org.nz/cgi-bin/man/man2html">man2html</A>,
+using the manual pages.<BR>
+Time: 23:33:39 GMT, March 20, 2004
+</BODY>
+</HTML>

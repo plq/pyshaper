@@ -1,0 +1,303 @@
+====================================================================
+=====================================================================
+pyshaper CONFIGURATION FILE SYNTAX
+=====================================================================
+=====================================================================
+
+---------------------------------------------------------------------
+1. File Layout
+---------------------------------------------------------------------
+
+Your pyshaper configuration file is line based, with each line being one of:
+    - whitespace
+    - comment (beginning with '#')
+    - setting command
+
+Whitespace and comment lines are ignored
+
+Setting command lines are in one of the forms:
+    
+    <item> <value>
+
+Whitespace at start and end of any line is ignored.
+<item> and <value> can be separated with one or more spaces and/or tabs
+
+Each <item> is one of:
+    
+    <iface>.in                      - interface's total input bandwidth in kbits/sec
+                                      (eg 'eth0.bw.in 256') - float values ok
+    <iface>.out                     - interface's total input bandwidth in kbits/sec
+                                      (eg 'eth0.bw.in 256') - float values ok
+
+    <iface>.<class>.pri             - Priority of traffic for class <class>, lower numbers
+                                      mean higher priority
+
+    <iface>.<class>.out.rate        - Minimum output bandwidth for class <class>, in kbits/sec
+                                      (eg 'eth0.fast.out.rate 128')
+                                      (note that due to linux traffic shaping limitations,
+                                      you cannot set total pools for inbound traffic
+
+    <iface>.<class>.out.ceil        - Maximum output bandwidth for class <class>, in kbits/sec
+                                      (eg 'eth0.fast.out.ceil 256')
+
+    <iface>.<class>.in              - Input bandwidth for filter class <class>
+                                      in kbits/sec. eg, 'eth0.fast.in 64', may be float
+
+    <iface>.<class>.test            - an expression, in python syntax, for testing whether a current
+                                      connection fits into class <class>
+                                      eg, "eth0.slow.test cmd == '/usr/bin/freenet'"
+                                      (see below for syntax summary)
+                                      You can have more than one test
+
+<class> is a freely chosen name for the traffic class.
+For outbound traffic, you can have any number of filtering
+criteria to place a given connection into a class.
+
+
+---------------------------------------------------------------------
+2. Description of test syntax
+---------------------------------------------------------------------
+
+ Yes, it's in Python syntax, but no, you don't have to learn python.
+ 
+ The items you can test include:
+     
+     raddr    Remote IP address, which is a string
+     rport    Remote port, an int
+     
+     laddr    Local IP address, a string
+     lport    Local port, an int
+     
+     user     Username under which the program talking on the port is running, string
+     pid      Process ID (probably not useful)
+     cmd      The command under which the program is running (ie, argv[0]), a string
+     args     The remaining arguments passed to the program, an array, access these
+              args as args[0], args[1],...
+
+     country  The text name of the country in which the remmote host resides, a string
+              Not available unless you have the Python GeoIP module (and libgeoip) installed.
+              If the remote is not a public IP, eg a class C like '192.168.100.1', this
+              will be None
+
+     cc       The two-letter country code of the remote peer, in uppercase, a string
+              (eg 'UK', 'US', 'AU', 'NZ' etc). Not available unless you have GeoIP installed.
+              If machine is on private net, this will be None
+
+  Python boolean operators:
+      
+      and
+      or
+      not
+
+  Bitwise operators:
+      
+      &  AND
+      |  OR
+      ~  (invert all bits)
+      ^  XOR
+
+  Grouping:
+  
+      parentheses, as usual
+
+  Strings:
+      
+      delimited by single or double quotes - 'fred' and "fred" are valid, as is "fred's mum"
+
+  Membership:
+      
+      in  - tests if the lvalue is an array member (or substring of) rvalue
+            eg:   'apache' in prog  - test whether prog contains the substring 'apache'
+                  'bwHogger.jar' in args - tests whether 'bwHogger' is a program arg
+
+  Examples:
+      
+      raddr == "66.35.250.150"
+
+        - remote host is slashdot.org
+
+      country == 'France' and lport == 80
+      
+        - someone in France hitting our local web server
+      
+      cc == 'NG' and lport == 25
+      
+        - someone needs our help to transfer a large sum of money out of an African state,
+          and will pay us a generous percentage
+
+      rport == 6346 or lport == 6346
+      
+        - Gnutella connection most likely. However, this won't catch all gnutella
+          connections, because users frequently change ports to evade ISP-level throttles
+      
+      'tella' in cmd or 'limewire' in cmd
+
+        - hopefully will match all current Gnutella connections
+
+---------------------------------------------------------------------------------
+3. Forbidden class and id names
+---------------------------------------------------------------------
+
+ This is a list of illegal class or id names. Use of these names will cause
+ errors, or have some freaky unexpected and undesirable effects:
+     
+     bwIn
+     bwOut
+     bwOutCeil
+     bwOutRate
+     ceil
+     classes
+     cmdq
+     expr
+     in
+     matches
+     name
+     out
+     parent
+     pri
+     rate
+     save
+     verbose
+
+
+---------------------------------------------------------------------
+5. Example scripts
+---------------------------------------------------------------------
+
+ (These will hopefully make the above easier to understand):
+    
+    1. No specific shaping, just limit eth0 to 128kbits in, 96kbits out:
+        
+        eth0.in 128
+        eth0.out 96
+    
+    2. Set eth0 to 256k in/out. Throttle all traffic to France to 40k in, 20-60k out:
+        
+        eth0.in 256
+        eth0.out 256
+        
+        eth0.france.out.rate 20
+        eth0.france.out.ceil 60
+        eth0.france.in 40
+        eth0.france.test country=='France'
+        
+       Note - the identifier 'france' is not special. the last four lines
+       could be equivalently expressed as:
+
+        eth0.blue.out.rate 60
+        eth0.blue.out.ceil 60
+        eth0.blue.in 40
+        eth0.blue.test country=='France'
+
+    3. Throttle all I2P connections to 4-16k out (total), and each 3k in:
+        
+        eth0.in 256
+        eth0.out 256
+        eth0.p2p.out.rate 4
+        eth0.p2p.out.ceil 16
+        eth0.p2p.in 3
+        eth0.p2p.test ((cmd == '/usr/bin/java') and \
+                           ('net.invisiblenet.i2p.router.Router' in args))
+       
+       Note - we identify I2P connections by the fact that they run under java, and contain
+       the program argument 'net.invisiblenet.i2p.router.Router'
+
+    4. We're running a web server, over a 512 in, 128k out connection
+       Throttle all default traffic to 4-64kbits, low priority, but give full bandwidth and
+       high priority to replies from our web server:
+        
+        eth0.in 512
+        eth0.out 128
+        
+        eth0.default.pri 3
+        eth0.default.out.rate 4
+        eth0.default.out.ceil 64
+
+        eth0.fast.pri 2
+        eth0.fast.out.rate 128
+        eth0.fast.out.ceil 128
+
+        eth0.fast.test lport == 80
+
+    5. Set up a painful drip-feed for all SMTP connections from Nigeria, assuming that
+       you don't normally correspond with Nigerians. This will delay Nigerian mailservers
+       in their transmissions of 419 scam messages:
+        
+        eth0.in = 1024
+        eth0.out = 256
+
+        eth0.default.pri 2
+        eth0.default.out.rate 128
+        eth0.default.out.ceil 256
+
+        eth0.nigeria.pri 10
+        eth0.nigeria.out.bw 1
+        eth0.nigeria.out.ceil 1
+        eth0.nigeria.in 1
+        eth0.nigeria.test country == 'Nigeria' \
+                               and laddr == '192.168.100.1' \
+                               and lport == 25
+
+       Note however that since SMTP sessions can happen quite quickly, the scammer will have
+       been and gone before the next run of connection detection and filtering. This therefore
+       is just a conceptual example.
+
+
+---------------------------------------------------------------
+6. WEIRD QUIRKS AND BASTARDISATIONS
+---------------------------------------------------------------
+
+pyshaper works by periodically running 'netstat' to get a list of current
+connections, matching these against your rules, then generating and executing
+a pile of tc commands.
+
+Info on the 'tc' utility is scarce, so I've gleaned what little I know from
+the wondershaper script, from the LARTC HOWTO, from the scant info on
+the tc manpages, and here and there.
+
+Firstly, it's crucial to know one thing - managing outbound traffic is
+completely different from a technical point of view to managing inbound traffic.
+
+With outbound traffic, tc supports some wonderful constructs like 'Hierarchical
+Token Bucket' (HTB) that allow you to set up whole trees of bandwidth allocations.
+You can control your outbound traffic right down to the last byts.
+
+But the mechanism for managing inbound traffic is far more primitive.
+'tc' only offers a single 'ingress queue', but allows you to set 'policing', ie
+traffic limits, on inbound traffic matching certain criteria.
+
+Now here's the difference:
+    
+    - with outbound traffic, you can set up whole 'classes' of traffic, and
+      set shared bandwidth allocations for any number of connections in a 'class'
+      
+    - with inbound traffic, you cannot set up such 'pools'. tc can only set up
+      single policing filters, each with its own separate limit.
+
+To restore some coherency here, what we do is split up the input bandwidth between
+all connections matching a filter class.
+
+So if we have 'eth0.someclass.in 128', and there are 4 connections currently
+matching one or more of the tests for 'eth0.someclass', then pyshaper will
+set up a policing ingress filter for each connection, and set the rate to 32,
+with the rate calculated by dividing the total inbound bandwidth allocation by the
+number of connections which match one or more filters in the class.
+
+One more note - there is a price to pay for setting a low period for shaping.
+At the start of each shaping cycle, pyshaper issues tc commands to take down
+all the shaping structures, and issues new commands to set up the new shaper
+configuration. In the time between taking down the existing structure, and
+erecting a new one, packets will fly at full rate, which means that the effective
+bandwidth will turn out to be greater than what you've set for each class.
+
+This 'leakage' phenomenon becomes much worse if you're running pyshaper in
+verbose mode, because instead of piping the tc commands in one hit to a shell
+subprocess, the commands get printed to stdout and executed, one at a time.
+
+So there is a trade-off between the prompt pickup and shaping of new connections,
+and leakage of excess bandwidth for existing connections. The best you can do to
+arrive at the ultimate set up is to experiment.
+
+Generally, the more frequent the shaping cycle, the more you'll need to
+under-estimate the input and output bandwidth settings.
+

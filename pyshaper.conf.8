@@ -1,0 +1,427 @@
+.TH "pyshaper.conf" "8" "0.1.0" "David McNab" "pyshaper configuration file syntax"
+.SH "NAME"
+.LP 
+\fBpyshaper.conf\fR \- Configuration file format for pyshaper(8)
+.SH "DESCRIPTION"
+.LP 
+.B 
+pyshaper(8)
+is driven by a configuration file, normally
+.B 
+/etc/pyshaper/pyshaper.conf
+.LP 
+However, you can override this by setting the environment variable
+.B 
+PYSHAPERCONFIG
+to the full pathname of another file.
+.LP 
+The format of
+.B 
+pyshaper.conf
+files is described in the next section.
+.SH "SYNTAX"
+.LP 
+.B 
+pyshaper.conf
+file syntax is simple and straigforward.
+.LP 
+Firstly (as is the syntax of many other configuration files), blank lines are ignored, as is all text between the comment character
+.B 
+#
+and the end of the line.
+.LP 
+Actual
+.B 
+pyshaper.conf
+declarations are simple one\-line statements, as follows:
+
+\fBperiod
+.I 
+seconds
+.IP 
+Connection scanning interval, in seconds.
+.br 
+pyshaper will scan the current TCP connections once each interval, and execute traffic\-shaping commands based on the connections which match your rules
+
+.LP 
+\fIinterface\fR.\fBin\fR \fIrate\fR
+.IP 
+Downstream bandwidth of network interface device, in kilobits per second.
+.br 
+Float values are acceptable.
+.br 
+For example,
+.B 
+eth0.in 256
+
+.LP 
+\fIinterface\fR.\fBout\fR \fIrate\fR
+.IP 
+Upstream bandwidth of network interface device, in kilobits per second.
+.br 
+.IP 
+Float values are acceptable.
+.br 
+For example,
+.B 
+eth0.out 256
+
+.LP 
+\fIinterface\fR.\fIclass\fR.\fBpri\fR \fIpriority\fR
+.IP 
+Sets the priority for traffic class \fIclass\fR on network interface \fIinterface\fR to \fIpriority\fR.
+.br 
+.IP 
+Lower values indicate higher priority. Default is 1.
+.br 
+.IP 
+For example,
+.B 
+eth1.p2ptraffic.pri 10
+
+.LP 
+\fIinterface\fR.\fIclass\fR.\fBout.rate\fR \fIrate\fR
+.IP 
+Sets minimum available outgoing bandwidth for traffic class \fIclass\fR on network interface \fIinterface\fR to \fIrate\fR kilobits per second. Float values are acceptable.
+.br 
+.IP 
+All current connections which match the test for class \fIclass\fR will share from a minimum outgoing bandwidth limit of \fIrate\fR kilobits per second.
+.br 
+For example,
+.B 
+eth1.p2ptraffic.out.rate 32
+
+.LP 
+\fIinterface\fR.\fIclass\fR.\fBout.ceil\fR \fIrate\fR
+.IP 
+Sets minimum available outgoing bandwidth for traffic class \fIclass\fR on network interface \fIinterface\fR to \fIrate\fR kilobits per second.
+.IP 
+.br 
+Float values are acceptable.
+.br 
+.IP 
+.br 
+All current connections which match the test for class \fIclass\fR will share from a minimum outgoing bandwidth limit of \fIrate\fR kilobits per second.
+.br 
+.IP 
+For example,
+.B 
+eth1.p2ptraffic.out.rate 32
+
+.LP 
+\fIinterface\fR.\fIclass\fR.\fBin\fR \fIrate\fR
+.IP 
+Sets incoming bandwidth ceiling for traffic class \fIclass\fR on network interface \fIinterface\fR to \fIrate\fR kilobits per second. Float values are acceptable.
+.br 
+.IP 
+Note that this \fIrate\fR will be evenly divided up amongst all current connections which match the rules for class \fIclass\fR. So if you have allocated 32 kb/s for a class, and there are 4 connections currently matching that class, each connection will receive 8 kb/s of input bandwidth. (All packets in excess of that rate will be dropped, causing the upstream transport to ultimately back off and send slower).
+.br 
+.IP 
+Note \- while outgoing bandwidth is allocated from an aggregate pool (whereby a single connection can get the full pool of bandwidth if no other connections are currently sending), input bandwidth (or \fBingress policing\fR) is far more primitive. Even if none of the other n\-1 connections are receiving, a connection's input bandwidth will still be limited to \fIrate\fR/n kbits/sec.
+.br 
+.IP 
+For example,
+.B 
+eth1.p2ptraffic.in 64
+
+.LP 
+\fIinterface\fR.\fIclass\fR.\fBtest\fR \fIbool\-expression\fR
+.IP 
+Declare a test for whether to include each given connection on interface \fIinterface\fR into traffic class \fIclass\fR.
+.IP 
+.br 
+\fIbool\-expression\fR is a boolean expression which determines whether each connection should be included. This is in Python syntax, and uses the usual \fBparentheses\fR for grouping, \fBand\fR, \fBor\fR and \fBnot\fR as boolean operators, \fB+\fR, \fB\-\fR, \fB*\fR, \fB/\fR, \fB**\fR as arithmetic operators, \fB<\fR, \fB<=\fR, \fB==\fR, \fB!=\fR,  \fB>=\fR and \fB>\fR as relational operators, and \fB'\fR and \fB"\fR as string delimiters, and \fB[\fR and \fB]\fR for accessing list (array) elements. In addition, you can break up long lines by putting a backslash \fB\\\fR at the end of each line (except the last) of a long expression.
+
+.IP 
+.br 
+In these expressions, the following identifiers are available for testing:
+
+.IP 
+.br 
+\fBraddr\fR \- the IP address of the remote end of the connection (string)
+
+.IP 
+.br 
+\fBrport\fR \- the port on the remote host (integer)
+
+.IP 
+.br 
+\fBladdr\fR \- the IP address of the local end of the connection (should be the same as the IP address configured for the network interface) (string)
+
+.IP 
+.br 
+\fBlport\fR \- the port on the local host (integer)
+
+.IP 
+.br 
+\fBuser\fR \- the username under which the program on the local end of the connection is running (string)
+
+.IP 
+.br 
+\fBpid\fR \- the process id of the program on the local end of the connection (integer)
+
+.IP 
+.br 
+\fBcc\fR \- the 2\-letter uppercase country code indicating the location of the remote end of the connection, eg \fB'AU'\fR for Australia. (string)
+
+.IP 
+.br 
+\fBcountry\fR \- the full English name of the country in which the peer on the remote end of the connection resides, eg \fB'New Zealand'\fR (string)
+
+.IP 
+.br 
+\fBcmd\fR \- the direct command (or executable filename) by which the program on the local end of the connection was launched \- or (for C/Python/Java programmers' benefit), the program's \fBargv[0]\fR. For example, \fB'/usr/bin/telnet'\fR (string)
+
+.IP 
+.br 
+\fBargs\fR \- the invocation arguments which were used in launching the program on the local end of the connection, or (in C parlance, \fBargv+1\fR, or in Python parlance, \fBsys.argv[1:]\fR). (list)
+
+.IP 
+.br 
+If you want, you can have more than one \fIinterface\fR.\fIclass\fR.\fBtest\fR declaration for each class. If you do declare multiple tests, then a connection will match if it passes \fBone or more\fR of these tests.
+
+.LP 
+\fBSTATIC SHAPING\fR
+
+There are cases where the traffic you want to shape only needs to be matched against the source host/port, or the destination port. For example, responses from your webserver, or a local p2p app which just happens to be listening on a fixed port.
+
+In such cases, you can fall back on traditional 'static' traffic\-shaping practice \- that of specifying a combination of remote/local host/port.
+
+In addition to 'dynamic shaping' (periodically scanning current connections and matching them against rules), pyshaper supports 'static shaping'. This means that in traffic class definitions in your pyshaper.conf file, you can specify static properties to match.
+
+To define static matching properties, all you need to do is use one or more of the declarations:
+
+.IP 
+\fIinterface\fR.\fIclass\fR.\fBraddr\fR \fIremoteIPaddr\fR
+.br 
+\fIinterface\fR.\fIclass\fR.\fBrport\fR \fIremotePort\fR
+.br 
+\fIinterface\fR.\fIclass\fR.\fBlport\fR \fIlocalPort\fR
+
+.LP 
+If one or more of these three declarators appears in your configuration, the class will be flagged as 'static', in which tc shaping commands will be executed whether or not there are current connections matching that class.
+
+Also, any connections which match the given raddr/laddr/lport declarations of one or more static classes will not be matched against the rules for any dynamic classes.
+
+Conceptually, 'static' shaping takes precedence over 'dynamic' shaping.
+
+Use of 'static' shaping criteria can have a performance benefit, in that any change in the status of connections which match your static classes will not cause pyshaper to take down and rebuild the current shaping structure. This will avoid the problem of 'transient bandwidth leakage' (Refer pyshaper(1), BUGS).
+
+Let's look at a P2P scenario. Imagine you are running Freenet, and have opened port 13119 to the outside world as your Freenet FNP port. You can create a class which not only matches all Freenet traffic (by testing the connected program's arguments), but also matches traffic to/from port 13119. For this scenario, we could use the class traffic declarations:
+
+.IP 
+eth0.freenet.in 32
+.br 
+eth0.freenet.out.rate 16
+.br 
+eth0.freenet.out.ceil 32
+.br 
+eth0.freenet.test 'freenet.node.Main' in args
+.br 
+eth0.freenet.lport 13119
+
+.SH "EXAMPLES"
+.LP 
+1. No specific shaping, just limit eth0 to 128kbits in, 96kbits out:
+.IP 
+eth0.in 128
+.br 
+eth0.out 96
+
+.LP 
+2. Set eth0 to 256k in/out. Throttle all traffic to France to 40k in, 20\-60k out:
+.IP 
+eth0.in 256
+.br 
+eth0.out 256
+.br 
+eth0.france.out.rate 20
+.br 
+eth0.france.out.ceil 60
+.br 
+eth0.france.in 40
+.br 
+eth0.france.test country=='France'
+.br 
+.LP 
+.br 
+Note \- the identifier 'france' is not special. the last four lines could be equivalently expressed as:
+.IP 
+eth0.blue.out.rate 60
+.br 
+eth0.blue.out.ceil 60
+.br 
+eth0.blue.in 40
+.br 
+eth0.blue.test country=='France'
+.br 
+
+.LP 
+3. Throttle all I2P connections to 4\-16k out (total), and each 3k in:
+.IP 
+eth0.in 256
+.br 
+eth0.out 256
+.br 
+eth0.p2p.out.rate 4
+.br 
+eth0.p2p.out.ceil 16
+.br 
+eth0.p2p.in 3
+.br 
+eth0.p2p.test ((cmd == '/usr/bin/java') and \\
+    ('net.invisiblenet.i2p.router.Router' in args))
+
+.IP 
+.br 
+Note \- we identify I2P connections by the fact that they run under java, and contain the program argument 'net.invisiblenet.i2p.router.Router'
+
+.LP 
+4. We're running a web server, over a 512 in, 128k out connection. Throttle all default traffic to 4\-64kbits, low priority, but give full bandwidth and high priority to replies from our web server:
+.IP 
+eth0.in 512
+.br 
+eth0.out 128
+.br 
+.br 
+eth0.default.pri 3
+.br 
+eth0.default.out.rate 4
+.br 
+eth0.default.out.ceil 64
+.br 
+eth0.fast.pri 2
+.br 
+eth0.fast.out.rate 128
+.br 
+eth0.fast.out.ceil 128
+.br 
+eth0.fast.test lport == 80
+.br 
+
+.LP 
+5. Set up a painful drip\-feed for all SMTP connections from Nigeria, assuming that you don't normally correspond with Nigerians. This will delay Nigerian mailservers in their transmissions of 419 scam messages:
+.IP 
+eth0.in = 1024
+.br 
+eth0.out = 256
+.br 
+eth0.default.pri 2
+.br 
+eth0.default.out.rate 128
+.br 
+eth0.default.out.ceil 256
+.br 
+eth0.nigeria.pri 10
+.br 
+eth0.nigeria.out.bw 1
+.br 
+eth0.nigeria.out.ceil 1
+.br 
+eth0.nigeria.in 1
+.br 
+eth0.nigeria.test country == 'Nigeria' \\
+      and laddr == '192.168.100.1' \\
+      and lport == 25
+.br 
+.IP 
+Note however that since SMTP sessions can happen quite quickly, the scammer will have been and gone before the next run of connection detection and filtering. This therefore
+is just a conceptual example.
+
+.SH "QUIRKS"
+.LP 
+STATIC VERSUS DYNAMIC SHAPING
+
+.IP 
+As discussed above, pyshaper manages bandwidth via both 'static' and 'dynamic' rules.
+
+With 'static' rules, pyshaper periodically runs 'netstat' to get a list of
+current connections, matching these against your rules, then generating and executing tc commands to specifically shape each individual matching connection.
+
+With 'dynamic' rules, pyshaper just runs one set of 'tc' commands to throttle the egress and ingress traffic matching that rule.
+
+One important caveat \- if you create a traffic class with both 'static' and 'dynamic' rules, you should look carefully at the ingress (incoming) bandwidth limit. Because if some current connections match the 'static' rule, and other connections match one or more of the 'dynamic' rules, then two pools of ingress bandwidth will be created \- one divided up amongst all the connections which match the 'dynamic' rules, and one which gets shared by all the connections matching the 'static' rule.
+
+For instance, if you have a class for I2P traffic, with both static and dynamic rules, and have set the incoming bandwidth to 20kbits/s, then you could find inbound I2P traffic consuming 40kbits/s.
+
+Your options here \- (1) halve the inbound limit, and hope that your I2P router has a roughly equal number of incoming and outgoing connections, or (2) don't bother with the static rule \- just specify the dynamic rule.
+
+Note, however, that all connections matching a class will share the same outgoing bandwidth pool, regardless of whether they match the static rule or a dynamic rule.
+
+.LP 
+WHAT IS 'tc'?
+
+.IP 
+'tc' is a program, short for 'Traffic Control', part of the iproute2 suite of software.
+
+Info on 'tc' is scarce, so I've gleaned what little I know from the wondershaper script, from the LARTC HOWTO, from the helpful folks on the LARTC mailing list, from the scant info on
+the tc manpages, and here and there.
+
+tc can be a little hard to fathom, which is why pyshaper was created.
+
+.LP 
+INBOUND VERSUS OUTBOUND
+
+.IP 
+Firstly, it's crucial to know one thing \- managing outbound traffic is
+completely different from a technical point of view to managing inbound traffic.
+
+With outbound traffic, tc supports some wonderful constructs like 'Hierarchical
+Token Bucket' (HTB) that allow you to set up whole trees of bandwidth allocations.
+You can control your outbound traffic right down to the last byts.
+
+But the mechanism for managing inbound traffic is far more primitive.
+'tc' only offers a single 'ingress queue', but allows you to set 'policing', ie
+traffic limits, on inbound traffic matching certain criteria.
+
+Now here's the difference:
+    
+    \- with outbound traffic, you can set up whole 'classes' of traffic, and
+      set shared bandwidth allocations for any number of connections in a 'class'
+      
+    \- with inbound traffic, you cannot set up such 'pools'. tc can only set up
+      single policing filters, each with its own separate limit.
+
+To restore some coherency here, what we do is split up the input bandwidth between
+all connections matching a filter class.
+
+So if we have \fBeth0.someclass.in 128\fR, and there are 4 connections currently
+matching one or more of the tests for 'eth0.someclass', then pyshaper will
+set up a policing ingress filter for each connection, and set the rate to 32,
+with the rate calculated by dividing the total inbound bandwidth allocation by the
+number of connections which match one or more filters in the class.
+
+.LP 
+BANDWIDTH LEAKAGE
+
+.IP 
+One more note \- there is a price to pay for setting a low period for shaping.
+At the start of each shaping cycle, pyshaper issues tc commands to take down
+all the shaping structures, and issues new commands to set up the new shaper
+configuration. In the time between taking down the existing structure, and
+erecting a new one, packets will fly at full rate, which means that the effective
+bandwidth will turn out to be greater than what you've set for each class.
+
+This 'leakage' phenomenon becomes much worse if you're running pyshaper in
+verbose mode, because instead of piping the tc commands in one hit to a shell
+subprocess, the commands get printed to stdout and executed, one at a time.
+
+So there is a trade\-off between the prompt pickup and shaping of new connections,
+and leakage of excess bandwidth for existing connections. The best you can do to
+arrive at the ultimate set up is to experiment.
+
+Generally, the more frequent the shaping cycle, the more you'll need to
+under\-estimate the input and output bandwidth settings.
+.SH "FILES"
+.LP 
+/etc/pyshaper/pyshaper.conf
+.SH "SEE ALSO"
+.LP 
+.B 
+pyshaper(8)
+.LP 
+.B 
+tc(8)
+.LP 
+.B 
+python(1)
